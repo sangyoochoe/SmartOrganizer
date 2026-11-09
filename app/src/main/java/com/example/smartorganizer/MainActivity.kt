@@ -267,13 +267,12 @@ class MainActivity : Activity() {
                     @Suppress("DEPRECATION")
                     val info = packageManager.getPackageArchiveInfo(tempFile.absolutePath, PackageManager.GET_PERMISSIONS)
                         ?: throw IllegalArgumentException("APK 매니페스트를 읽을 수 없음")
-                    val app = info.applicationInfo
                     val label = try {
-                        if (app != null) {
-                            app.sourceDir = tempFile.absolutePath
-                            app.publicSourceDir = tempFile.absolutePath
-                            app.loadLabel(packageManager).toString()
-                        } else entry.name
+                        info.applicationInfo?.let { archiveApp ->
+                            archiveApp.sourceDir = tempFile.absolutePath
+                            archiveApp.publicSourceDir = tempFile.absolutePath
+                            archiveApp.loadLabel(packageManager).toString()
+                        } ?: entry.name
                     } catch (_: Exception) { entry.name }
                     val requested = info.requestedPermissions?.toList() ?: emptyList()
                     val sensitive = requested.filter { permission ->
