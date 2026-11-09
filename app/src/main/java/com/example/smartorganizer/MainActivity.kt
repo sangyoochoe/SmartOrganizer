@@ -1,11 +1,14 @@
 package com.example.smartorganizer
 
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.widget.*
 import androidx.documentfile.provider.DocumentFile
+import java.io.File
 import java.security.MessageDigest
 import java.text.DecimalFormat
 import java.util.concurrent.Executors
@@ -27,6 +30,8 @@ class MainActivity : Activity() {
     private lateinit var results: LinearLayout
     private lateinit var scanButton: Button
     private lateinit var duplicateButton: Button
+    private lateinit var insightButton: Button
+    private lateinit var apkButton: Button
     private lateinit var appsButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,39 +42,51 @@ class MainActivity : Activity() {
     private fun buildUi() {
         val outer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(24, 24, 24, 16)
+            setPadding(20, 20, 20, 12)
         }
         val title = TextView(this).apply {
             text = "Smart Organizer"
             textSize = 26f
-            setPadding(0, 0, 0, 6)
+            setPadding(0, 0, 0, 5)
         }
         val subtitle = TextView(this).apply {
-            text = "1차 개발 · 실제 파일 분석"
+            text = "파일 분석 · 중복 탐지 · APK 권한 점검"
             textSize = 14f
         }
         summary = TextView(this).apply {
-            text = "분석할 폴더를 선택하세요. 샘플 파일이나 가짜 결과는 표시하지 않습니다."
+            text = "분석할 폴더를 선택하세요. 실제 파일만 검사하며 자동 삭제하지 않습니다."
             textSize = 14f
-            setPadding(0, 18, 0, 14)
+            setPadding(0, 14, 0, 10)
         }
         scanButton = Button(this).apply {
-            text = "폴더 선택 및 스캔"
+            text = "폴더 선택 및 전체 스캔"
             setOnClickListener { chooseFolder() }
         }
         duplicateButton = Button(this).apply {
-            text = "동일 내용 파일 검사"
+            text = "완전 중복 파일 검사 (SHA-256)"
             isEnabled = false
             setOnClickListener { scanExactDuplicates() }
         }
+        insightButton = Button(this).apply {
+            text = "정리 후보 분석 (대용량·오래됨·이름 중복)"
+            isEnabled = false
+            setOnClickListener { showOrganizationInsights() }
+        }
+        apkButton = Button(this).apply {
+            text = "APK 권한·버전 검사"
+            isEnabled = false
+            setOnClickListener { inspectApks() }
+        }
         appsButton = Button(this).apply {
-            text = "설치된 앱 목록 보기"
+            text = "설치된 앱 목록 및 분류"
             setOnClickListener { showLaunchableApps() }
         }
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(scanButton)
             addView(duplicateButton)
+            addView(insightButton)
+            addView(apkButton)
             addView(appsButton)
         }
         val scroll = ScrollView(this)
@@ -97,7 +114,7 @@ class MainActivity : Activity() {
         startActivityForResult(intent, REQUEST_TREE)
     }
 
-    @Deprecated("Deprecated in Android API; retained for broad device compatibility")
+    @Deprecated("Deprecated API retained for compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode != REQUEST_TREE || resultCode != RESULT_OK) return
@@ -110,7 +127,7 @@ class MainActivity : Activity() {
     }
 
     private fun scanFolder(treeUri: Uri) {
-        setBusy(true, "선택한 폴더와 하위 폴더를 실제로 읽는 중입니다…")
+        setBusy(true, "선택한 폴더와 하위 폴더를 스캔 중입니다…")
         worker.execute {
             val found = mutableListOf<Entry>()
             val root = DocumentFile.fromTreeUri(this, treeUri)
@@ -133,37 +150,169 @@ class MainActivity : Activity() {
             runOnUiThread {
                 entries.clear()
                 entries.addAll(found)
-                val fileCount = found.count { !it.directory }
-                val dirCount = found.count { it.directory }
-                val bytes = found.filter { !it.directory }.sumOf { it.size }
-                summary.text = "실제 스캔 결과: 파일 ${fileCount}개 · 폴더 ${dirCount}개 · ${humanSize(bytes)}" +
-                        if (inaccessible > 0) "\n일부 하위 폴더는 접근할 수 없었습니다." else ""
-                duplicateButton.isEnabled = fileCount > 0
+                val files = found.filter { !it.directory }
+                val bytes = files.sumOf { it.size }
+                summary.text = "스캔 완료: 파일 ${files.size}개 · 폴더 ${found.count { it.directory }}개 · ${humanSize(bytes)}" +
+                        if (inaccessible > 0) "\n일부 위치는 Android 권한 제한으로 읽지 못했습니다." else ""
+                val enabled = files.isNotEmpty()
+                duplicateButton.isEnabled = enabled
+                insightButton.isEnabled = enabled
+                apkButton.isEnabled = enabled
                 renderEntries(found)
                 setBusy(false)
             }
         }
     }
 
-    private fun renderEntries(items: List<Entry>) {
-        results.removeAllViews()
-        if (items.isEmpty()) {
-            addLine("선택한 위치에서 표시할 파일이나 폴더를 찾지 못했습니다.")
-            return
+    private fun showOrganizationInsights() {
+        val snapshot = entries.filter { !it.directory }
+        setBusy(true, "대용량·오래된 파일·이름 중복 후보를 계산 중입니다…")
+        worker.execute {
+            val now = System.currentTimeMillis()
+            val large = snapshot.filter { it.size >= LARGE_FILE_BYTES }.sortedByDescending { it.size }
+            val old = snapshot.filter { it.modified > 0L && now - it.modified >= OLD_FILE_AGE }
+                .sortedBy { it.modified }
+            val sameNames = snapshot.groupBy { it.name.lowercase() }.values.filter { it.size > 1 }
+            val apk = snapshot.filter { it.name.endsWith(".apk", true) }
+            runOnUiThread {
+                results.removeAllViews()
+                addLine("정리 후보 분석 결과", true)
+                addLine("대용량 파일 (100MB 이상): ${large.size}개")
+                large.take(100).forEach { addEntryLine(it) }
+                addLine("오래된 파일 (180일 이상): ${old.size}개", true)
+                old.take(100).forEach { addEntryLine(it) }
+                addLine("이름이 같은 파일 그룹: ${sameNames.size}개", true)
+                sameNames.take(100).forEachIndexed { i, group ->
+                    addLine("그룹 ${i + 1}")
+                    group.forEach { addEntryLine(it) }
+                }
+                addLine("APK 파일: ${apk.size}개", true)
+                apk.forEach { addEntryLine(it) }
+                addLine("주의: 오래됨·이름 중복은 삭제 근거가 아닙니다. 항목을 눌러 개별 작업을 선택하세요.")
+                summary.text = "정리 후보 분석 완료 · 아무 파일도 자동 변경하거나 삭제하지 않았습니다."
+                setBusy(false)
+            }
         }
-        items.take(5000).forEach { item ->
-            val prefix = if (item.directory) "📁" else "📄"
-            val detail = if (item.directory) "" else " · ${humanSize(item.size)}"
-            addLine("$prefix  ${item.relativePath}$detail")
+    }
+
+    private fun addEntryLine(entry: Entry) {
+        val line = TextView(this).apply {
+            text = "• ${entry.relativePath} · ${humanSize(entry.size)}"
+            textSize = 13f
+            setPadding(8, 7, 4, 7)
+            setOnClickListener { showFileActions(entry) }
         }
-        if (items.size > 5000) addLine("화면 표시 제한: ${items.size}개 중 처음 5,000개 표시")
+        results.addView(line)
+    }
+
+    private fun showFileActions(entry: Entry) {
+        val options = arrayOf("파일 정보 보기", "이름 변경", "삭제")
+        AlertDialog.Builder(this)
+            .setTitle(entry.name)
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> AlertDialog.Builder(this).setMessage(
+                        "경로: ${entry.relativePath}\n크기: ${humanSize(entry.size)}\n수정: ${formatDate(entry.modified)}"
+                    ).setPositiveButton("확인", null).show()
+                    1 -> renameEntry(entry)
+                    2 -> confirmDelete(entry)
+                }
+            }.setNegativeButton("닫기", null).show()
+    }
+
+    private fun renameEntry(entry: Entry) {
+        val input = EditText(this).apply { setText(entry.name); selectAll() }
+        AlertDialog.Builder(this).setTitle("새 파일 이름")
+            .setView(input)
+            .setNegativeButton("취소", null)
+            .setPositiveButton("변경") { _, _ ->
+                val newName = input.text.toString().trim()
+                if (newName.isEmpty() || newName.contains("/") || newName == "." || newName == "..") {
+                    toast("올바른 파일 이름을 입력하세요.")
+                } else {
+                    val doc = DocumentFile.fromSingleUri(this, entry.uri)
+                    val ok = try { doc?.renameTo(newName) == true } catch (_: Exception) { false }
+                    toast(if (ok) "이름을 변경했습니다. 다시 스캔해 주세요." else "이 위치에서는 이름 변경을 지원하지 않습니다.")
+                    if (ok) selectedTree?.let { scanFolder(it) }
+                }
+            }.show()
+    }
+
+    private fun confirmDelete(entry: Entry) {
+        AlertDialog.Builder(this)
+            .setTitle("파일 삭제 확인")
+            .setMessage("${entry.relativePath}\n\n이 파일을 삭제할까요? 이 작업은 되돌릴 수 없을 수 있습니다.")
+            .setNegativeButton("취소", null)
+            .setPositiveButton("삭제") { _, _ ->
+                val doc = DocumentFile.fromSingleUri(this, entry.uri)
+                val ok = try { doc?.delete() == true } catch (_: Exception) { false }
+                toast(if (ok) "파일을 삭제했습니다." else "삭제할 수 없습니다. 권한 또는 위치 제한을 확인하세요.")
+                if (ok) selectedTree?.let { scanFolder(it) }
+            }.show()
+    }
+
+    private fun inspectApks() {
+        val apks = entries.filter { !it.directory && it.name.endsWith(".apk", true) }
+        setBusy(true, "APK 파일을 임시 사본으로 읽어 패키지·버전·요청 권한을 확인 중입니다…")
+        worker.execute {
+            val reports = mutableListOf<String>()
+            for (entry in apks) {
+                var temp: File? = null
+                try {
+                    temp = File.createTempFile("apk-inspect-", ".apk", cacheDir)
+                    contentResolver.openInputStream(entry.uri)?.use { input ->
+                        temp.outputStream().use { output -> input.copyTo(output) }
+                    } ?: throw IllegalStateException("파일을 열 수 없음")
+                    @Suppress("DEPRECATION")
+                    val info = packageManager.getPackageArchiveInfo(temp.absolutePath, PackageManager.GET_PERMISSIONS)
+                        ?: throw IllegalArgumentException("APK 매니페스트를 읽을 수 없음")
+                    val app = info.applicationInfo
+                    app.sourceDir = temp.absolutePath
+                    app.publicSourceDir = temp.absolutePath
+                    val label = try { app.loadLabel(packageManager).toString() } catch (_: Exception) { entry.name }
+                    val requested = info.requestedPermissions?.toList() ?: emptyList()
+                    val sensitive = requested.filter { permission ->
+                        permission.contains("SMS") || permission.contains("CONTACTS") ||
+                                permission.contains("RECORD_AUDIO") || permission.contains("CAMERA") ||
+                                permission.contains("LOCATION") || permission.contains("ACCESSIBILITY") ||
+                                permission.contains("INSTALL_PACKAGES") || permission.contains("QUERY_ALL_PACKAGES") ||
+                                permission.contains("SYSTEM_ALERT_WINDOW")
+                    }
+                    reports.add(buildString {
+                        append("APK: ${entry.relativePath}\n")
+                        append("앱 이름: $label\n패키지: ${info.packageName}\n")
+                        append("버전명: ${info.versionName ?: "알 수 없음"} · 버전코드: ${info.longVersionCode}\n")
+                        append("요청 권한: ${requested.size}개\n")
+                        if (sensitive.isEmpty()) append("주의 권한으로 분류한 항목 없음\n")
+                        else {
+                            append("검토할 권한 (${sensitive.size}개):\n")
+                            sensitive.forEach { append("  • $it\n") }
+                        }
+                        append("평가: 권한은 기능상 필요할 수도 있으며, 이 결과만으로 악성 여부를 판정하지 않습니다.")
+                    })
+                } catch (e: Exception) {
+                    reports.add("APK: ${entry.relativePath}\n분석 불가: ${e.message ?: "읽기 오류"}")
+                } finally { try { temp?.delete() } catch (_: Exception) {} }
+            }
+            runOnUiThread {
+                results.removeAllViews()
+                if (reports.isEmpty()) addLine("선택 폴더에서 APK 파일을 찾지 못했습니다.")
+                reports.forEachIndexed { i, report ->
+                    addLine("APK 분석 ${i + 1}", true)
+                    addLine(report)
+                }
+                summary.text = "APK 메타데이터 검사 완료 · 정적 권한 점검이며 백신 검사나 악성코드 확정 판정은 아닙니다."
+                setBusy(false)
+            }
+        }
     }
 
     private fun scanExactDuplicates() {
         if (selectedTree == null) return
-        setBusy(true, "크기가 같은 파일 후보를 SHA-256으로 비교 중입니다. 파일 수에 따라 시간이 걸립니다…")
+        val snapshot = entries.toList()
+        setBusy(true, "크기가 같은 파일 후보를 SHA-256으로 비교 중입니다…")
         worker.execute {
-            val candidates = entries.filter { !it.directory && it.size > 0L }
+            val candidates = snapshot.filter { !it.directory && it.size > 0L }
                 .groupBy { it.size }.values.filter { it.size > 1 }
             val groups = mutableMapOf<String, MutableList<Entry>>()
             for (bucket in candidates) for (entry in bucket) {
@@ -179,19 +328,19 @@ class MainActivity : Activity() {
                     } ?: continue
                     val hash = md.digest().joinToString("") { "%02x".format(it) }
                     groups.getOrPut(hash) { mutableListOf() }.add(entry)
-                } catch (_: Exception) { /* 해당 파일은 읽을 수 없어 비교에서 제외 */ }
+                } catch (_: Exception) {}
             }
             val duplicates = groups.values.filter { it.size > 1 }
             runOnUiThread {
                 results.removeAllViews()
                 if (duplicates.isEmpty()) {
                     summary.text = "검사 가능한 파일에서 동일 내용의 중복 파일을 찾지 못했습니다."
-                    addLine("중복 파일 없음")
+                    addLine("완전 중복 파일 없음")
                 } else {
-                    summary.text = "실제 내용이 동일한 파일 그룹 ${duplicates.size}개를 찾았습니다. 자동 삭제하지 않았습니다."
+                    summary.text = "내용이 완전히 같은 중복 파일 그룹 ${duplicates.size}개 · 자동 삭제하지 않았습니다."
                     duplicates.forEachIndexed { index, group ->
                         addLine("중복 그룹 ${index + 1}", true)
-                        group.forEach { addLine("${it.relativePath} · ${humanSize(it.size)}") }
+                        group.forEach { addEntryLine(it) }
                     }
                 }
                 setBusy(false)
@@ -209,18 +358,46 @@ class MainActivity : Activity() {
                 .sortedBy { it.first.lowercase() }
             runOnUiThread {
                 results.removeAllViews()
-                summary.text = "실행 가능한 설치 앱 ${apps.size}개 (Android 공개 범위 내)"
-                apps.forEach { (label, pkg) -> addLine("📱 $label · $pkg") }
+                summary.text = "실행 가능한 설치 앱 ${apps.size}개 · 자동 변경 없음"
+                val categories = apps.groupBy { (label, pkg) ->
+                    val key = (label + " " + pkg).lowercase()
+                    when {
+                        listOf("camera", "photo", "gallery", "카메라", "갤러리", "사진").any { key.contains(it) } -> "사진·카메라"
+                        listOf("game", "play", "게임").any { key.contains(it) } -> "게임·엔터테인먼트"
+                        listOf("mail", "calendar", "office", "문서", "메일", "캘린더").any { key.contains(it) } -> "업무·생산성"
+                        listOf("music", "audio", "video", "youtube", "음악", "동영상").any { key.contains(it) } -> "음악·동영상"
+                        listOf("map", "nav", "지도", "내비").any { key.contains(it) } -> "지도·이동"
+                        else -> "기타"
+                    }
+                }
+                categories.toSortedMap().forEach { (category, list) ->
+                    addLine("$category (${list.size})", true)
+                    list.forEach { (label, pkg) -> addLine("📱 $label · $pkg") }
+                }
                 setBusy(false)
             }
         }
+    }
+
+    private fun renderEntries(items: List<Entry>) {
+        results.removeAllViews()
+        if (items.isEmpty()) {
+            addLine("선택한 위치에서 표시할 파일이나 폴더를 찾지 못했습니다.")
+            return
+        }
+        items.take(3000).forEach { item ->
+            val prefix = if (item.directory) "📁" else "📄"
+            val detail = if (item.directory) "" else " · ${humanSize(item.size)}"
+            addLine("$prefix ${item.relativePath}$detail")
+        }
+        if (items.size > 3000) addLine("화면 표시 제한: ${items.size}개 중 처음 3,000개 표시")
     }
 
     private fun addLine(text: String, heading: Boolean = false) {
         results.addView(TextView(this).apply {
             this.text = text
             textSize = if (heading) 16f else 13f
-            if (heading) setPadding(0, 14, 0, 5) else setPadding(4, 6, 4, 6)
+            setPadding(if (heading) 0 else 4, if (heading) 14 else 6, 4, 6)
         })
     }
 
@@ -228,8 +405,15 @@ class MainActivity : Activity() {
         if (message != null) summary.text = message
         scanButton.isEnabled = !busy
         duplicateButton.isEnabled = !busy && entries.any { !it.directory }
+        insightButton.isEnabled = !busy && entries.any { !it.directory }
+        apkButton.isEnabled = !busy && entries.any { !it.directory }
         appsButton.isEnabled = !busy
     }
+
+    private fun formatDate(time: Long): String =
+        if (time <= 0L) "알 수 없음" else java.text.SimpleDateFormat("yyyy-MM-dd HH:mm", java.util.Locale.getDefault()).format(java.util.Date(time))
+
+    private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
 
     private fun humanSize(bytes: Long): String {
         if (bytes < 1024) return "$bytes B"
@@ -245,5 +429,9 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 
-    companion object { private const val REQUEST_TREE = 7101 }
+    companion object {
+        private const val REQUEST_TREE = 7101
+        private const val LARGE_FILE_BYTES = 100L * 1024L * 1024L
+        private const val OLD_FILE_AGE = 180L * 24L * 60L * 60L * 1000L
+    }
 }
