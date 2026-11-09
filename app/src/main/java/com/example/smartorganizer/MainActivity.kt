@@ -268,9 +268,13 @@ class MainActivity : Activity() {
                     val info = packageManager.getPackageArchiveInfo(tempFile.absolutePath, PackageManager.GET_PERMISSIONS)
                         ?: throw IllegalArgumentException("APK 매니페스트를 읽을 수 없음")
                     val app = info.applicationInfo
-                    app.sourceDir = tempFile.absolutePath
-                    app.publicSourceDir = tempFile.absolutePath
-                    val label = try { app.loadLabel(packageManager).toString() } catch (_: Exception) { entry.name }
+                    val label = try {
+                        if (app != null) {
+                            app.sourceDir = tempFile.absolutePath
+                            app.publicSourceDir = tempFile.absolutePath
+                            app.loadLabel(packageManager).toString()
+                        } else entry.name
+                    } catch (_: Exception) { entry.name }
                     val requested = info.requestedPermissions?.toList() ?: emptyList()
                     val sensitive = requested.filter { permission ->
                         permission.contains("SMS") || permission.contains("CONTACTS") ||
