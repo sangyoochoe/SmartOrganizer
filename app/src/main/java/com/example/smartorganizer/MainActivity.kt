@@ -359,7 +359,7 @@ class MainActivity : Activity() {
                     } ?: throw IllegalStateException("파일을 열 수 없음")
                     reports.add(buildString {
                         append("ZIP: ${entry.relativePath}\n")
-                        append("내부 파일: $count개 · 읽은 압축 해제 데이터: ${humanSize(expanded)}\n")
+                        append("내부 파일: ${count}개 · 읽은 압축 해제 데이터: ${humanSize(expanded)}\n")
                         append("APK: $apkCount개 · 스크립트: $scriptCount개 · 실행 파일 형식: $executableCount개\n")
                         append("주의 경로명 패턴: $suspiciousPaths개\n내부 파일 예시:\n")
                         if (samples.isEmpty()) append("  (파일 없음)\n")
