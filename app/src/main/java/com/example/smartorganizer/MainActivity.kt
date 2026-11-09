@@ -12,6 +12,7 @@ import java.io.File
 import java.security.MessageDigest
 import java.text.DecimalFormat
 import java.util.concurrent.Executors
+import java.util.zip.ZipInputStream
 
 private data class Entry(
     val name: String,
@@ -33,6 +34,7 @@ class MainActivity : Activity() {
     private lateinit var insightButton: Button
     private lateinit var apkButton: Button
     private lateinit var appsButton: Button
+    private lateinit var archiveButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -77,6 +79,11 @@ class MainActivity : Activity() {
             isEnabled = false
             setOnClickListener { inspectApks() }
         }
+        archiveButton = Button(this).apply {
+            text = "ZIP 압축파일 내부 구성 검사"
+            isEnabled = false
+            setOnClickListener { inspectArchives() }
+        }
         appsButton = Button(this).apply {
             text = "설치된 앱 목록 및 분류"
             setOnClickListener { showLaunchableApps() }
@@ -87,6 +94,7 @@ class MainActivity : Activity() {
             addView(duplicateButton)
             addView(insightButton)
             addView(apkButton)
+            addView(archiveButton)
             addView(appsButton)
         }
         val scroll = ScrollView(this)
@@ -311,6 +319,71 @@ class MainActivity : Activity() {
         }
     }
 
+
+    private fun inspectArchives() {
+        val archives = entries.filter { !it.directory && it.name.endsWith(".zip", true) }
+        setBusy(true, "ZIP 내부 파일 목록과 위험 신호를 읽는 중입니다…")
+        worker.execute {
+            val reports = mutableListOf<String>()
+            for (entry in archives) {
+                var count = 0
+                var expanded = 0L
+                var apkCount = 0
+                var scriptCount = 0
+                var executableCount = 0
+                var suspiciousPaths = 0
+                val samples = mutableListOf<String>()
+                try {
+                    contentResolver.openInputStream(entry.uri)?.use { raw ->
+                        ZipInputStream(raw.buffered()).use { zip ->
+                            while (true) {
+                                val item = zip.nextEntry ?: break
+                                if (!item.isDirectory) {
+                                    count++
+                                    val lower = item.name.lowercase()
+                                    if (lower.endsWith(".apk")) apkCount++
+                                    if (ARCHIVE_SCRIPT_EXTENSIONS.any { lower.endsWith(it) }) scriptCount++
+                                    if (ARCHIVE_EXECUTABLE_EXTENSIONS.any { lower.endsWith(it) }) executableCount++
+                                    if (ARCHIVE_RISKY_PATH_MARKERS.any { lower.contains(it) }) suspiciousPaths++
+                                    if (samples.size < 30) samples.add(item.name)
+                                    val buffer = ByteArray(32 * 1024)
+                                    while (true) {
+                                        val n = zip.read(buffer)
+                                        if (n < 0) break
+                                        expanded += n
+                                    }
+                                }
+                                zip.closeEntry()
+                            }
+                        }
+                    } ?: throw IllegalStateException("파일을 열 수 없음")
+                    reports.add(buildString {
+                        append("ZIP: ${entry.relativePath}\n")
+                        append("내부 파일: $count개 · 읽은 압축 해제 데이터: ${humanSize(expanded)}\n")
+                        append("APK: $apkCount개 · 스크립트: $scriptCount개 · 실행 파일 형식: $executableCount개\n")
+                        append("주의 경로명 패턴: $suspiciousPaths개\n내부 파일 예시:\n")
+                        if (samples.isEmpty()) append("  (파일 없음)\n")
+                        else samples.forEach { append("  • $it\n") }
+                        if (count > samples.size) append("  … 나머지 ${count - samples.size}개 생략\n")
+                        append("평가: 파일명·확장자 기반 정적 신호일 뿐, 악성 여부를 확정하지 않습니다. 압축파일은 실행하거나 추출하지 않았습니다.")
+                    })
+                } catch (e: Exception) {
+                    reports.add("ZIP: ${entry.relativePath}\n분석 불가: ${e.message ?: "손상되었거나 지원하지 않는 압축 형식"}")
+                }
+            }
+            runOnUiThread {
+                results.removeAllViews()
+                if (reports.isEmpty()) addLine("선택한 폴더에서 ZIP 파일을 찾지 못했습니다.")
+                reports.forEachIndexed { i, report ->
+                    addLine("압축파일 분석 ${i + 1}", true)
+                    addLine(report)
+                }
+                summary.text = "ZIP 내부 구성 검사 완료 · 파일을 실행하거나 추출하지 않았습니다."
+                setBusy(false)
+            }
+        }
+    }
+
     private fun scanExactDuplicates() {
         if (selectedTree == null) return
         val snapshot = entries.toList()
@@ -411,6 +484,7 @@ class MainActivity : Activity() {
         duplicateButton.isEnabled = !busy && entries.any { !it.directory }
         insightButton.isEnabled = !busy && entries.any { !it.directory }
         apkButton.isEnabled = !busy && entries.any { !it.directory }
+        archiveButton.isEnabled = !busy && entries.any { !it.directory && it.name.endsWith(".zip", true) }
         appsButton.isEnabled = !busy
     }
 
@@ -437,5 +511,8 @@ class MainActivity : Activity() {
         private const val REQUEST_TREE = 7101
         private const val LARGE_FILE_BYTES = 100L * 1024L * 1024L
         private const val OLD_FILE_AGE = 180L * 24L * 60L * 60L * 1000L
+        private val ARCHIVE_SCRIPT_EXTENSIONS = listOf(".sh", ".bat", ".cmd", ".ps1", ".js", ".vbs", ".py", ".jar")
+        private val ARCHIVE_EXECUTABLE_EXTENSIONS = listOf(".exe", ".dll", ".so", ".dex", ".apk")
+        private val ARCHIVE_RISKY_PATH_MARKERS = listOf("../", "/../", "autorun", "startup", "payload")
     }
 }
