@@ -259,16 +259,17 @@ class MainActivity : Activity() {
             for (entry in apks) {
                 var temp: File? = null
                 try {
-                    temp = File.createTempFile("apk-inspect-", ".apk", cacheDir)
+                    val tempFile = File.createTempFile("apk-inspect-", ".apk", cacheDir)
+                    temp = tempFile
                     contentResolver.openInputStream(entry.uri)?.use { input ->
-                        temp.outputStream().use { output -> input.copyTo(output) }
+                        tempFile.outputStream().use { output -> input.copyTo(output) }
                     } ?: throw IllegalStateException("파일을 열 수 없음")
                     @Suppress("DEPRECATION")
-                    val info = packageManager.getPackageArchiveInfo(temp.absolutePath, PackageManager.GET_PERMISSIONS)
+                    val info = packageManager.getPackageArchiveInfo(tempFile.absolutePath, PackageManager.GET_PERMISSIONS)
                         ?: throw IllegalArgumentException("APK 매니페스트를 읽을 수 없음")
                     val app = info.applicationInfo
-                    app.sourceDir = temp.absolutePath
-                    app.publicSourceDir = temp.absolutePath
+                    app.sourceDir = tempFile.absolutePath
+                    app.publicSourceDir = tempFile.absolutePath
                     val label = try { app.loadLabel(packageManager).toString() } catch (_: Exception) { entry.name }
                     val requested = info.requestedPermissions?.toList() ?: emptyList()
                     val sensitive = requested.filter { permission ->
