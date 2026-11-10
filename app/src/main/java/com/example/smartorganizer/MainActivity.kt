@@ -35,6 +35,7 @@ class MainActivity : Activity() {
     private lateinit var apkButton: Button
     private lateinit var appsButton: Button
     private lateinit var archiveButton: Button
+    private lateinit var historyButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,7 +85,7 @@ class MainActivity : Activity() {
             isEnabled = false
             setOnClickListener { inspectArchives() }
         }
-        appsButton = Button(this).apply {
+        historyButton = Button(this).apply {\n            text = "파일 작업 기록"\n            setOnClickListener { showOperationHistory() }\n        }\n        appsButton = Button(this).apply {
             text = "설치된 앱 목록 및 분류"
             setOnClickListener { showLaunchableApps() }
         }
@@ -423,6 +424,26 @@ class MainActivity : Activity() {
                 setBusy(false)
             }
         }
+    }
+
+    private fun recordOperation(action: String, original: String, result: String) {
+        val prefs = getSharedPreferences("operation_history", MODE_PRIVATE)
+        val line = "${System.currentTimeMillis()}|${action}|${original}|${result}"
+        val old = prefs.getString("records", "") ?: ""
+        prefs.edit().putString("records", (old.lines().filter { it.isNotBlank() } + line).takeLast(200).joinToString("\\n")).apply()
+    }
+
+    private fun showOperationHistory() {
+        val records = getSharedPreferences("operation_history", MODE_PRIVATE)
+            .getString("records", "")?.lines()?.filter { it.isNotBlank() } ?: emptyList()
+        results.removeAllViews()
+        addLine("최근 파일 작업 기록 (최대 200건)", true)
+        if (records.isEmpty()) addLine("기록된 파일 변경 작업이 없습니다.")
+        records.asReversed().forEach { row ->
+            val parts = row.split("|", limit = 4)
+            if (parts.size == 4) addLine("${formatDate(parts[0].toLongOrNull() ?: 0L)} · ${parts[1]}\\n${parts[2]} → ${parts[3]}")
+        }
+        summary.text = "파일 이름 변경·삭제 성공 기록 · 삭제 복구 기능은 아직 지원하지 않습니다."
     }
 
     private fun showLaunchableApps() {
