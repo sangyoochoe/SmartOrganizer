@@ -236,9 +236,27 @@ class MainActivity : Activity() {
                 .sortedBy { it.modified }
             val sameNames = snapshot.groupBy { it.name.lowercase() }.values.filter { it.size > 1 }
             val apk = snapshot.filter { it.name.endsWith(".apk", true) }
+            fun category(entry: Entry): String {
+                val ext = entry.name.substringAfterLast('.', "").lowercase()
+                return when (ext) {
+                    "jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp" -> "사진"
+                    "mp4", "mkv", "mov", "avi", "webm", "3gp" -> "동영상"
+                    "mp3", "m4a", "wav", "flac", "aac", "ogg" -> "음악·오디오"
+                    "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "hwp", "hwpx" -> "문서"
+                    "zip", "7z", "rar", "tar", "gz" -> "압축파일"
+                    "apk", "xapk", "apks" -> "설치파일"
+                    else -> "기타"
+                }
+            }
+            val categories = snapshot.groupBy { category(it) }
             runOnUiThread {
                 results.removeAllViews()
                 addLine("정리 후보 분석 결과", true)
+                addLine("파일 종류별 분류", true)
+                categories.toSortedMap().forEach { (name, files) ->
+                    val total = files.sumOf { it.size }
+                    addLine("$name: ${files.size}개 · ${humanSize(total)}")
+                }
                 addLine("대용량 파일 (100MB 이상): ${large.size}개")
                 large.take(100).forEach { addEntryLine(it) }
                 addLine("오래된 파일 (180일 이상): ${old.size}개", true)
