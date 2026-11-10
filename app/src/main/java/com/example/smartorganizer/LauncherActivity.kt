@@ -14,6 +14,9 @@ import android.view.Gravity
 import android.view.View
 import android.widget.*
 import kotlin.math.max
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.label.ImageLabeling
+import com.google.mlkit.vision.label.defaults.ImageLabelerOptions
 
 class LauncherActivity : Activity() {
     private val prefs by lazy { getSharedPreferences("photo_launcher", MODE_PRIVATE) }
@@ -55,6 +58,7 @@ class LauncherActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             addView(title, LinearLayout.LayoutParams(0, -2, 1f))
             addView(actionButton("배경") { chooseWallpaper() })
+            addView(actionButton("AI 배치") { analyzePhotoAndSuggest() })
             addView(actionButton("앱 +") { chooseApps() })
             addView(actionButton("편집") { editing = !editing; title.text = if (editing) "아이콘을 길게 눌러 배치 편집" else "나의 공간 · $layoutName" })
         }
@@ -193,6 +197,57 @@ class LauncherActivity : Activity() {
             }.show()
     }
 
+    private fun analyzePhotoAndSuggest() {
+        val saved = prefs.getString("wallpaper", null)
+        if (saved == null) { Toast.makeText(this, "먼저 배경 사진을 선택하세요.", Toast.LENGTH_SHORT).show(); return }
+        val uri = Uri.parse(saved)
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        try { contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) } } catch (_: Exception) {}
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) { Toast.makeText(this, "사진을 읽을 수 없습니다.", Toast.LENGTH_LONG).show(); return }
+        val sample = maxOf(1, maxOf(bounds.outWidth, bounds.outHeight) / 1024)
+        val options = BitmapFactory.Options().apply { inSampleSize = sample }
+        val bitmap = try { contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, options) } } catch (_: Exception) { null }
+        if (bitmap == null) { Toast.makeText(this, "사진을 불러오지 못했습니다.", Toast.LENGTH_LONG).show(); return }
+        Toast.makeText(this, "사진 장면을 기기에서 분석 중입니다…", Toast.LENGTH_SHORT).show()
+        val labeler = ImageLabeling.getClient(ImageLabelerOptions.DEFAULT_OPTIONS)
+        labeler.process(InputImage.fromBitmap(bitmap, 0)).addOnSuccessListener { labels ->
+            val ranked = labels.sortedByDescending { it.confidence }.take(8)
+            val description = ranked.joinToString(", ") { it.text + " " + (it.confidence * 100).toInt() + "%" }
+            val installed = packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+                .map { it.activityInfo.packageName to it.loadLabel(packageManager).toString() }.distinctBy { it.first }
+            val existing = currentApps()
+            val candidates = installed.filter { it.first !in existing }
+            fun score(app: Pair<String, String>): Int {
+                val text = (app.first + " " + app.second).lowercase()
+                return ranked.sumOf { label ->
+                    val words = when {
+                        label.text.contains("food", true) || label.text.contains("restaurant", true) -> listOf("food", "배달", "음식", "restaurant")
+                        label.text.contains("travel", true) || label.text.contains("building", true) -> listOf("map", "지도", "travel", "여행")
+                        label.text.contains("sport", true) || label.text.contains("fitness", true) -> listOf("fitness", "운동", "건강", "sport")
+                        label.text.contains("music", true) -> listOf("music", "음악", "audio")
+                        label.text.contains("plant", true) || label.text.contains("flower", true) || label.text.contains("nature", true) -> listOf("photo", "사진", "weather", "날씨")
+                        else -> listOf(label.text.lowercase())
+                    }
+                    if (words.any { text.contains(it) }) (label.confidence * 10).toInt() else 0
+                }
+            }
+            val suggestions = candidates.sortedByDescending { score(it) }.take(12)
+            AlertDialog.Builder(this).setTitle("사진 분석 · 홈 화면 제안")
+                .setMessage("인식한 장면: " + if (description.isBlank()) "인식된 라벨 없음" else description +
+                    "\n\n설치 앱 이름과 사진 라벨을 비교해 관련 가능성이 있는 앱을 앞쪽에 배치합니다. 앱 추천은 참고용이며 직접 수정할 수 있습니다.\n\n추천 앱: " + suggestions.take(6).joinToString { it.second })
+                .setNegativeButton("취소", null).setPositiveButton("제안 적용") { _, _ ->
+                    saveApps(existing + suggestions.map { it.first })
+                    renderApps()
+                    Toast.makeText(this, "사진 분석 기반 앱 배치를 적용했습니다.", Toast.LENGTH_LONG).show()
+                }.show()
+            bitmap.recycle()
+            labeler.close()
+        }.addOnFailureListener { error ->
+            bitmap.recycle()
+            labeler.close()
+            Toast.makeText(this, "사진 분석 실패: " + error.localizedMessage, Toast.LENGTH_LONG).show()
+        }
+    }
     private fun chooseWallpaper() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             type = "image/*"
