@@ -335,7 +335,7 @@ class MainActivity : Activity() {
                 val ok = try { doc?.delete() == true } catch (_: Exception) { false }
                 toast(if (ok) "파일을 삭제했습니다." else "삭제할 수 없습니다. 권한 또는 위치 제한을 확인하세요.")
                 if (ok) recordOperation("삭제", entry.relativePath, "삭제 완료")
-                if (ok) selectedTree?.let { scanFolder(it) }
+                if (ok && selectedTrees.isNotEmpty()) scanSelectedFolders()
             }.show()
     }
 
