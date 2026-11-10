@@ -38,6 +38,7 @@ class MainActivity : Activity() {
     private lateinit var appsButton: Button
     private lateinit var archiveButton: Button
     private lateinit var historyButton: Button
+    private lateinit var launcherButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -107,6 +108,10 @@ class MainActivity : Activity() {
             text = "설치된 앱 목록 및 분류"
             setOnClickListener { showLaunchableApps() }
         }
+        launcherButton = Button(this).apply {
+            text = "사진 기반 나만의 홈 화면 열기"
+            setOnClickListener { startActivity(Intent(this@MainActivity, LauncherActivity::class.java)) }
+        }
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(scanButton)
@@ -118,6 +123,7 @@ class MainActivity : Activity() {
             addView(archiveButton)
             addView(historyButton)
             addView(appsButton)
+            addView(launcherButton)
         }
         val scroll = ScrollView(this)
         results = LinearLayout(this).apply {
