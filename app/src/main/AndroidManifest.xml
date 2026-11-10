@@ -13,8 +13,7 @@
         <activity
             android:name=".LauncherActivity"
             android:exported="true"
-            android:label="Smart Organizer Home"
-            android:configChanges="screenSize|smallestScreenSize|orientation">
+            android:label="Smart Organizer Home">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.HOME"/>
