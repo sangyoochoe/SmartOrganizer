@@ -85,7 +85,10 @@ class MainActivity : Activity() {
             isEnabled = false
             setOnClickListener { inspectArchives() }
         }
-        historyButton = Button(this).apply {\n            text = "파일 작업 기록"\n            setOnClickListener { showOperationHistory() }\n        }\n        appsButton = Button(this).apply {
+        historyButton = Button(this).apply {\n            text = "파일 작업 기록"
+            setOnClickListener { showOperationHistory() }
+        }
+        appsButton = Button(this).apply {
             text = "설치된 앱 목록 및 분류"
             setOnClickListener { showLaunchableApps() }
         }
@@ -96,6 +99,7 @@ class MainActivity : Activity() {
             addView(insightButton)
             addView(apkButton)
             addView(archiveButton)
+            addView(historyButton)
             addView(appsButton)
         }
         val scroll = ScrollView(this)
@@ -242,6 +246,7 @@ class MainActivity : Activity() {
                     val doc = DocumentFile.fromSingleUri(this, entry.uri)
                     val ok = try { doc?.renameTo(newName) == true } catch (_: Exception) { false }
                     toast(if (ok) "이름을 변경했습니다. 다시 스캔해 주세요." else "이 위치에서는 이름 변경을 지원하지 않습니다.")
+                    if (ok) recordOperation("이름 변경", entry.relativePath, newName)
                     if (ok) selectedTree?.let { scanFolder(it) }
                 }
             }.show()
@@ -256,6 +261,7 @@ class MainActivity : Activity() {
                 val doc = DocumentFile.fromSingleUri(this, entry.uri)
                 val ok = try { doc?.delete() == true } catch (_: Exception) { false }
                 toast(if (ok) "파일을 삭제했습니다." else "삭제할 수 없습니다. 권한 또는 위치 제한을 확인하세요.")
+                if (ok) recordOperation("삭제", entry.relativePath, "삭제 완료")
                 if (ok) selectedTree?.let { scanFolder(it) }
             }.show()
     }
