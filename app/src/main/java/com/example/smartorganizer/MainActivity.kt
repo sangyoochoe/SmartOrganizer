@@ -31,6 +31,7 @@ class MainActivity : Activity() {
     private lateinit var results: LinearLayout
     private lateinit var scanButton: Button
     private lateinit var runScanButton: Button
+    private lateinit var manageFoldersButton: Button
     private lateinit var duplicateButton: Button
     private lateinit var insightButton: Button
     private lateinit var apkButton: Button
@@ -40,7 +41,9 @@ class MainActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        restoreSelectedTrees()
         buildUi()
+        updateFolderSelectionUi()
     }
 
     private fun buildUi() {
@@ -71,6 +74,10 @@ class MainActivity : Activity() {
             text = "선택한 폴더 모두 스캔 (0개)"
             isEnabled = false
             setOnClickListener { scanSelectedFolders() }
+        }
+        manageFoldersButton = Button(this).apply {
+            text = "선택 폴더 관리"
+            setOnClickListener { showSelectedFolders() }
         }
         duplicateButton = Button(this).apply {
             text = "완전 중복 파일 검사 (SHA-256)"
@@ -104,6 +111,7 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             addView(scanButton)
             addView(runScanButton)
+            addView(manageFoldersButton)
             addView(duplicateButton)
             addView(insightButton)
             addView(apkButton)
@@ -145,13 +153,31 @@ class MainActivity : Activity() {
                 (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         try { contentResolver.takePersistableUriPermission(uri, flags) } catch (_: Exception) {}
         selectedTrees[uri.toString()] = uri
+        saveSelectedTrees()
         updateFolderSelectionUi()
         toast("폴더를 추가했습니다. 다른 폴더도 추가한 뒤 전체 스캔을 누르세요.")
+    }
+
+    private fun saveSelectedTrees() {
+        getSharedPreferences("scan_folders", MODE_PRIVATE).edit()
+            .putStringSet("uris", selectedTrees.keys.toSet()).apply()
+    }
+
+    private fun restoreSelectedTrees() {
+        val saved = getSharedPreferences("scan_folders", MODE_PRIVATE)
+            .getStringSet("uris", emptySet()) ?: emptySet()
+        saved.forEach { value ->
+            val uri = Uri.parse(value)
+            val permission = contentResolver.persistedUriPermissions
+                .firstOrNull { it.uri == uri && it.isReadPermission }
+            if (permission != null) selectedTrees[value] = uri
+        }
     }
 
     private fun updateFolderSelectionUi() {
         runScanButton.text = "선택한 폴더 모두 스캔 (${selectedTrees.size}개)"
         runScanButton.isEnabled = selectedTrees.isNotEmpty()
+        manageFoldersButton.isEnabled = true
         summary.text = "선택된 폴더 ${selectedTrees.size}개 · 폴더 추가 버튼을 길게 누르면 목록/해제 관리"
     }
 
@@ -162,8 +188,8 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this).setTitle("스캔 대상 폴더").setItems(labels) { _, which ->
             val item = items[which]
             AlertDialog.Builder(this).setMessage("${labels[which]} 폴더를 제외할까요?")
-                .setNegativeButton("취소", null).setPositiveButton("제외") { _, _ -> selectedTrees.remove(item.key); updateFolderSelectionUi() }.show()
-        }.setPositiveButton("모두 해제") { _, _ -> selectedTrees.clear(); entries.clear(); updateFolderSelectionUi() }
+                .setNegativeButton("취소", null).setPositiveButton("제외") { _, _ -> selectedTrees.remove(item.key); saveSelectedTrees(); updateFolderSelectionUi() }.show()
+        }.setPositiveButton("모두 해제") { _, _ -> selectedTrees.clear(); saveSelectedTrees(); entries.clear(); updateFolderSelectionUi() }
             .setNegativeButton("닫기", null).show()
     }
 
@@ -532,6 +558,7 @@ class MainActivity : Activity() {
         if (message != null) summary.text = message
         scanButton.isEnabled = !busy
         runScanButton.isEnabled = !busy && selectedTrees.isNotEmpty()
+        manageFoldersButton.isEnabled = !busy
         duplicateButton.isEnabled = !busy && entries.any { !it.directory }
         insightButton.isEnabled = !busy && entries.any { !it.directory }
         apkButton.isEnabled = !busy && entries.any { !it.directory }
