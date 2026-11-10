@@ -543,11 +543,51 @@ class MainActivity : Activity() {
                 }
                 categories.toSortedMap().forEach { (category, list) ->
                     addLine("$category (${list.size})", true)
-                    list.forEach { (label, pkg) -> addLine("📱 $label · $pkg") }
+                    list.forEach { (label, pkg) ->
+                        val line = TextView(this).apply {
+                            val custom = getSharedPreferences("app_categories", MODE_PRIVATE).getString(pkg, null)
+                            text = "📱 $label · $pkg" + if (custom != null) "  [$custom]" else ""
+                            textSize = 13f
+                            setPadding(8, 8, 4, 8)
+                            setOnClickListener { showAppDetails(label, pkg) }
+                            setOnLongClickListener { editAppCategory(label, pkg); true }
+                        }
+                        results.addView(line)
+                    }
                 }
                 setBusy(false)
             }
         }
+    }
+
+    private fun showAppDetails(label: String, packageName: String) {
+        try {
+            val info = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
+            val version = packageManager.getPackageInfo(packageName, 0).versionName ?: "알 수 없음"
+            val custom = getSharedPreferences("app_categories", MODE_PRIVATE).getString(packageName, "자동 분류")
+            AlertDialog.Builder(this).setTitle(label)
+                .setMessage("패키지: $packageName\n버전: $version\n분류: $custom\n시스템 앱 여부: ${if (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM != 0) "시스템 앱" else "사용자 설치 앱"}")
+                .setPositiveButton("확인", null).setNeutralButton("분류 변경") { _, _ -> editAppCategory(label, packageName) }.show()
+        } catch (e: Exception) { toast("앱 정보를 읽지 못했습니다: ${e.message}") }
+    }
+
+    private fun editAppCategory(label: String, packageName: String) {
+        val current = getSharedPreferences("app_categories", MODE_PRIVATE).getString(packageName, "기타") ?: "기타"
+        val input = EditText(this).apply { setText(current); hint = "예: 업무, 금융, 자주 사용" }
+        AlertDialog.Builder(this).setTitle("$label 분류 지정")
+            .setMessage("원하는 분류명을 입력하세요.")
+            .setView(input).setNegativeButton("취소", null)
+            .setPositiveButton("저장") { _, _ ->
+                val value = input.text.toString().trim()
+                if (value.isNotEmpty()) {
+                    getSharedPreferences("app_categories", MODE_PRIVATE).edit().putString(packageName, value).apply()
+                    toast("앱 분류를 저장했습니다.")
+                    showLaunchableApps()
+                }
+            }.setNeutralButton("자동 분류로 초기화") { _, _ ->
+                getSharedPreferences("app_categories", MODE_PRIVATE).edit().remove(packageName).apply()
+                showLaunchableApps()
+            }.show()
     }
 
     private fun renderEntries(items: List<Entry>) {
