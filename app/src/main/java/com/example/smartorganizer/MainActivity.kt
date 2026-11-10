@@ -26,10 +26,11 @@ private data class Entry(
 class MainActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
     private val entries = mutableListOf<Entry>()
-    private var selectedTree: Uri? = null
+    private val selectedTrees = linkedMapOf<String, Uri>()
     private lateinit var summary: TextView
     private lateinit var results: LinearLayout
     private lateinit var scanButton: Button
+    private lateinit var runScanButton: Button
     private lateinit var duplicateButton: Button
     private lateinit var insightButton: Button
     private lateinit var apkButton: Button
@@ -62,8 +63,14 @@ class MainActivity : Activity() {
             setPadding(0, 14, 0, 10)
         }
         scanButton = Button(this).apply {
-            text = "폴더 선택 및 전체 스캔"
+            text = "＋ 스캔할 폴더 추가"
             setOnClickListener { chooseFolder() }
+            setOnLongClickListener { showSelectedFolders(); true }
+        }
+        runScanButton = Button(this).apply {
+            text = "선택한 폴더 모두 스캔 (0개)"
+            isEnabled = false
+            setOnClickListener { scanSelectedFolders() }
         }
         duplicateButton = Button(this).apply {
             text = "완전 중복 파일 검사 (SHA-256)"
@@ -96,6 +103,7 @@ class MainActivity : Activity() {
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(scanButton)
+            addView(runScanButton)
             addView(duplicateButton)
             addView(insightButton)
             addView(apkButton)
@@ -136,44 +144,58 @@ class MainActivity : Activity() {
         val flags = data.flags and
                 (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         try { contentResolver.takePersistableUriPermission(uri, flags) } catch (_: Exception) {}
-        selectedTree = uri
-        scanFolder(uri)
+        selectedTrees[uri.toString()] = uri
+        updateFolderSelectionUi()
+        toast("폴더를 추가했습니다. 다른 폴더도 추가한 뒤 전체 스캔을 누르세요.")
     }
 
-    private fun scanFolder(treeUri: Uri) {
-        setBusy(true, "선택한 폴더와 하위 폴더를 스캔 중입니다…")
+    private fun updateFolderSelectionUi() {
+        runScanButton.text = "선택한 폴더 모두 스캔 (${selectedTrees.size}개)"
+        runScanButton.isEnabled = selectedTrees.isNotEmpty()
+        summary.text = "선택된 폴더 ${selectedTrees.size}개 · 폴더 추가 버튼을 길게 누르면 목록/해제 관리"
+    }
+
+    private fun showSelectedFolders() {
+        val items = selectedTrees.entries.toList()
+        if (items.isEmpty()) { toast("먼저 폴더를 추가하세요."); return }
+        val labels = items.map { DocumentFile.fromTreeUri(this, it.value)?.name ?: "선택 폴더" }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("스캔 대상 폴더").setItems(labels) { _, which ->
+            val item = items[which]
+            AlertDialog.Builder(this).setMessage("${labels[which]} 폴더를 제외할까요?")
+                .setNegativeButton("취소", null).setPositiveButton("제외") { _, _ -> selectedTrees.remove(item.key); updateFolderSelectionUi() }.show()
+        }.setPositiveButton("모두 해제") { _, _ -> selectedTrees.clear(); entries.clear(); updateFolderSelectionUi() }
+            .setNegativeButton("닫기", null).show()
+    }
+
+    private fun scanSelectedFolders() {
+        val roots = selectedTrees.values.toList()
+        if (roots.isEmpty()) { toast("먼저 폴더를 추가하세요."); return }
+        setBusy(true, "선택한 폴더 ${roots.size}개와 하위 폴더를 스캔 중입니다…")
         worker.execute {
             val found = mutableListOf<Entry>()
-            val root = DocumentFile.fromTreeUri(this, treeUri)
             var inaccessible = 0
-            fun walk(dir: DocumentFile, parent: String) {
-                val children = try { dir.listFiles() } catch (_: Exception) {
-                    inaccessible++
-                    emptyArray()
+            roots.forEachIndexed { index, treeUri ->
+                val root = DocumentFile.fromTreeUri(this, treeUri)
+                val rootName = root?.name ?: "폴더 ${index + 1}"
+                fun walk(dir: DocumentFile, parent: String) {
+                    val children = try { dir.listFiles() } catch (_: Exception) { inaccessible++; emptyArray() }
+                    for (child in children) {
+                        val name = child.name ?: "(이름 없음)"
+                        val path = if (parent.isEmpty()) "$rootName/$name" else "$rootName/$parent/$name"
+                        val isDir = child.isDirectory
+                        found.add(Entry(name, path, if (child.isFile) child.length() else 0L, child.lastModified(), child.uri, isDir))
+                        if (isDir) walk(child, if (parent.isEmpty()) name else "$parent/$name")
+                    }
                 }
-                for (child in children) {
-                    val name = child.name ?: "(이름 없음)"
-                    val path = if (parent.isEmpty()) name else "$parent/$name"
-                    val isDir = child.isDirectory
-                    found.add(Entry(name, path, if (child.isFile) child.length() else 0L,
-                        child.lastModified(), child.uri, isDir))
-                    if (isDir) walk(child, path)
-                }
+                if (root != null) walk(root, "") else inaccessible++
             }
-            if (root != null) walk(root, "") else inaccessible++
             runOnUiThread {
-                entries.clear()
-                entries.addAll(found)
-                val files = found.filter { !it.directory }
-                val bytes = files.sumOf { it.size }
-                summary.text = "스캔 완료: 파일 ${files.size}개 · 폴더 ${found.count { it.directory }}개 · ${humanSize(bytes)}" +
-                        if (inaccessible > 0) "\n일부 위치는 Android 권한 제한으로 읽지 못했습니다." else ""
-                val enabled = files.isNotEmpty()
-                duplicateButton.isEnabled = enabled
-                insightButton.isEnabled = enabled
-                apkButton.isEnabled = enabled
-                renderEntries(found)
-                setBusy(false)
+                entries.clear(); entries.addAll(found.distinctBy { it.uri.toString() })
+                val files = entries.filter { !it.directory }
+                summary.text = "전체 스캔 완료: 선택 폴더 ${roots.size}개 · 파일 ${files.size}개 · 하위 폴더 ${entries.count { it.directory }}개 · ${humanSize(files.sumOf { it.size })}" + if (inaccessible > 0) "\n일부 위치는 Android 권한 제한으로 읽지 못했습니다." else ""
+                duplicateButton.isEnabled = files.isNotEmpty(); insightButton.isEnabled = files.isNotEmpty(); apkButton.isEnabled = files.isNotEmpty()
+                archiveButton.isEnabled = files.any { it.name.endsWith(".zip", true) }
+                renderEntries(entries); setBusy(false)
             }
         }
     }
@@ -248,7 +270,7 @@ class MainActivity : Activity() {
                     val ok = try { doc?.renameTo(newName) == true } catch (_: Exception) { false }
                     toast(if (ok) "이름을 변경했습니다. 다시 스캔해 주세요." else "이 위치에서는 이름 변경을 지원하지 않습니다.")
                     if (ok) recordOperation("이름 변경", entry.relativePath, newName)
-                    if (ok) selectedTree?.let { scanFolder(it) }
+                    if (ok) if (selectedTrees.isNotEmpty()) scanSelectedFolders()
                 }
             }.show()
     }
@@ -393,7 +415,7 @@ class MainActivity : Activity() {
     }
 
     private fun scanExactDuplicates() {
-        if (selectedTree == null) return
+        if (selectedTrees.isEmpty()) return
         val snapshot = entries.toList()
         setBusy(true, "크기가 같은 파일 후보를 SHA-256으로 비교 중입니다…")
         worker.execute {
@@ -509,6 +531,7 @@ class MainActivity : Activity() {
     private fun setBusy(busy: Boolean, message: String? = null) {
         if (message != null) summary.text = message
         scanButton.isEnabled = !busy
+        runScanButton.isEnabled = !busy && selectedTrees.isNotEmpty()
         duplicateButton.isEnabled = !busy && entries.any { !it.directory }
         insightButton.isEnabled = !busy && entries.any { !it.directory }
         apkButton.isEnabled = !busy && entries.any { !it.directory }
