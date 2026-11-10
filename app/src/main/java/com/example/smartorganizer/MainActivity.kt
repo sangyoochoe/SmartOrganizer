@@ -85,7 +85,8 @@ class MainActivity : Activity() {
             isEnabled = false
             setOnClickListener { inspectArchives() }
         }
-        historyButton = Button(this).apply {\n            text = "파일 작업 기록"
+        historyButton = Button(this).apply {
+            text = "파일 작업 기록"
             setOnClickListener { showOperationHistory() }
         }
         appsButton = Button(this).apply {
