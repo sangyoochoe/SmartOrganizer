@@ -64,7 +64,7 @@ class WallpaperStudioActivity : Activity() {
         })
         val buttons = LinearLayout(this).apply { gravity = Gravity.CENTER }
         buttons.addView(Button(this).apply { text = "사진 추가"; setOnClickListener { pick("image/*", 7101) } })
-        buttons.addView(Button(this).apply { text = "동영상 추가"; setOnClickListener { pick("video/*", 7102) } })
+        buttons.addView(Button(this).apply { text = "동영상 추가"; setOnClickListener { pick("video/*", 7102) } })\n        buttons.addView(Button(this).apply { text = "동영상 라이브 배경"; setOnClickListener { setLiveVideoWallpaper() } })
         buttons.addView(Button(this).apply { text = "접힌 화면"; setOnClickListener { target = WallpaperManager.FLAG_SYSTEM; Toast.makeText(this@WallpaperStudioActivity, "홈 배경 적용 대상으로 선택됨", Toast.LENGTH_SHORT).show() } })
         buttons.addView(Button(this).apply { text = "잠금 화면"; setOnClickListener { target = WallpaperManager.FLAG_LOCK; Toast.makeText(this@WallpaperStudioActivity, "잠금 화면 적용 대상으로 선택됨", Toast.LENGTH_SHORT).show() } })
         outer.addView(buttons)
@@ -151,6 +151,48 @@ class WallpaperStudioActivity : Activity() {
             }
             list.addView(row)
         }
+    }
+
+
+    private fun setLiveVideoWallpaper() {
+        val uri = selectedUri
+        if (uri == null || !selectedIsVideo) {
+            Toast.makeText(this, "먼저 동영상을 선택하세요.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        prefs.edit().putString("live_video_uri", uri.toString()).apply()
+        try {
+            val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+                putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                    android.content.ComponentName(this@WallpaperStudioActivity, VideoWallpaperService::class.java))
+            }
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, "라이브 배경 설정 화면을 열 수 없습니다: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun saveChargingVideo() {
+        val uri = selectedUri
+        if (uri == null || !selectedIsVideo) {
+            Toast.makeText(this, "먼저 충전 효과로 사용할 동영상을 선택하세요.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        prefs.edit().putString("charging_video_uri", uri.toString()).apply()
+        Toast.makeText(this, "충전 애니메이션 영상으로 저장했습니다.", Toast.LENGTH_LONG).show()
+    }
+
+    private fun previewChargingVideo() {
+        val uri = prefs.getString("charging_video_uri", null)?.let { Uri.parse(it) }
+        if (uri == null) {
+            Toast.makeText(this, "먼저 동영상을 선택하고 충전 애니메이션으로 저장하세요.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val player = VideoView(this)
+        AlertDialog.Builder(this).setTitle("충전 애니메이션 미리보기")
+            .setView(player).setPositiveButton("닫기", null).show()
+        player.setVideoURI(uri)
+        player.setOnPreparedListener { it.isLooping = true; player.start() }
     }
 
     private fun applyImage() {
