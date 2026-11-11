@@ -36,6 +36,18 @@ jobs:
         with:
           gradle-version: "8.9"
 
+      - name: Import Fold7 wallpaper and charging artwork
+        run: |
+          mkdir -p app/src/main/res/drawable-nodpi
+          curl -L --fail --retry 3 "https://github.com/teapo86/byeolsatang-downloads/releases/download/app-v25/byeolsatang.apk" -o /tmp/byeolsatang-reference.apk
+          unzip -p /tmp/byeolsatang-reference.apk res/drawable/wallpaper_thumbnail.png > app/src/main/res/drawable-nodpi/fold7_wallpaper_preview.png
+          unzip -p /tmp/byeolsatang-reference.apk assets/charge/solar_flare/before.png > app/src/main/res/drawable-nodpi/fold7_charge_solar.png
+          unzip -p /tmp/byeolsatang-reference.apk assets/charge/supersaiyan/before.png > app/src/main/res/drawable-nodpi/fold7_charge_super.png
+          unzip -p /tmp/byeolsatang-reference.apk res/drawable/charge_thumbnail.png > app/src/main/res/drawable-nodpi/fold7_charge_thumbnail.png
+          test -s app/src/main/res/drawable-nodpi/fold7_wallpaper_preview.png
+          test -s app/src/main/res/drawable-nodpi/fold7_charge_solar.png
+          test -s app/src/main/res/drawable-nodpi/fold7_charge_super.png
+
       - name: Build debug APK
         run: gradle --no-daemon :app:assembleDebug
 
