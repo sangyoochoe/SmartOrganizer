@@ -24,6 +24,7 @@ class WallpaperStudioActivity : Activity() {
     private lateinit var preview: FrameLayout
     private var selectedUri: Uri? = null
     private var selectedIsVideo = false
+    private var selectedBuiltinResId: Int = 0
     private var videoView: VideoView? = null
     private val media = mutableListOf<Pair<Uri, Boolean>>()
     private var target = WallpaperManager.FLAG_SYSTEM
@@ -71,6 +72,25 @@ class WallpaperStudioActivity : Activity() {
         buttons.addView(Button(this).apply { text = "외부 화면용 저장"; setOnClickListener { saveFoldWallpaper("folded_wallpaper_uri") } })
         buttons.addView(Button(this).apply { text = "내부 화면용 저장"; setOnClickListener { saveFoldWallpaper("expanded_wallpaper_uri") } })
         outer.addView(buttons)
+        outer.addView(TextView(this).apply {
+            text = "Fold7 전용 기본 배경 · 충전 아트"
+            textSize = 18f
+            setPadding(0, dp(12), 0, dp(6))
+        })
+        val builtins = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+        builtins.addView(Button(this).apply {
+            text = "기본 배경"
+            setOnClickListener { selectBuiltin(R.drawable.fold7_wallpaper_preview) }
+        }, LinearLayout.LayoutParams(0, dp(52), 1f))
+        builtins.addView(Button(this).apply {
+            text = "Solar Flare"
+            setOnClickListener { selectBuiltin(R.drawable.fold7_charge_solar) }
+        }, LinearLayout.LayoutParams(0, dp(52), 1f))
+        builtins.addView(Button(this).apply {
+            text = "Super Saiyan"
+            setOnClickListener { selectBuiltin(R.drawable.fold7_charge_super) }
+        }, LinearLayout.LayoutParams(0, dp(52), 1f))
+        outer.addView(builtins)
         preview = FrameLayout(this).apply {
             setBackgroundColor(0xff20242c.toInt())
             layoutParams = LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(12); bottomMargin = dp(12) }
@@ -126,10 +146,24 @@ class WallpaperStudioActivity : Activity() {
         renderList()
     }
 
+    private fun selectBuiltin(resId: Int) {
+        selectedBuiltinResId = resId
+        selectedUri = null
+        selectedIsVideo = false
+        showPreview()
+    }
+
     private fun showPreview() {
         videoView?.stopPlayback()
         videoView = null
         preview.removeAllViews()
+        if (selectedBuiltinResId != 0) {
+            preview.addView(ImageView(this).apply {
+                scaleType = ImageView.ScaleType.CENTER_CROP
+                setImageResource(selectedBuiltinResId)
+            }, FrameLayout.LayoutParams(-1, -1))
+            return
+        }
         val uri = selectedUri ?: run {
             preview.addView(TextView(this).apply { text = "사진 또는 동영상을 추가하세요."; setTextColor(-1); gravity = Gravity.CENTER })
             return
@@ -238,14 +272,20 @@ class WallpaperStudioActivity : Activity() {
 
     private fun applyImage() {
         val uri = selectedUri
-        if (uri == null || selectedIsVideo) {
-            Toast.makeText(this, "시스템 배경화면 적용은 사진을 선택했을 때 사용할 수 있습니다. 동영상은 앱 안에서 미리보기할 수 있습니다.", Toast.LENGTH_LONG).show()
+        if (selectedBuiltinResId == 0 && (uri == null || selectedIsVideo)) {
+            Toast.makeText(this, "사진 또는 기본 배경을 선택하세요.", Toast.LENGTH_LONG).show()
             return
         }
         try {
-            contentResolver.openInputStream(uri).use { input ->
-                if (input == null) throw IllegalStateException("이미지를 열 수 없습니다.")
-                WallpaperManager.getInstance(this).setStream(input, null, true, target)
+            if (selectedBuiltinResId != 0) {
+                resources.openRawResource(selectedBuiltinResId).use { input ->
+                    WallpaperManager.getInstance(this).setStream(input, null, true, target)
+                }
+            } else {
+                contentResolver.openInputStream(uri!!).use { input ->
+                    if (input == null) throw IllegalStateException("이미지를 열 수 없습니다.")
+                    WallpaperManager.getInstance(this).setStream(input, null, true, target)
+                }
             }
             Toast.makeText(this, "배경화면 적용을 요청했습니다.", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
