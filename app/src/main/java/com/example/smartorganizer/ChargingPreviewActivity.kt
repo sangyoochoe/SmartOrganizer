@@ -8,7 +8,8 @@ import android.widget.VideoView
 import android.widget.Toast
 
 /** Opened only after the user taps the charging notification. */
-class ChargingPreviewActivity : Activity() {\n    private var chargingVideo: VideoView? = null
+class ChargingPreviewActivity : Activity() {
+    private var chargingVideo: VideoView? = null
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         if (android.os.Build.VERSION.SDK_INT >= 27) setShowWhenLocked(true)
@@ -21,6 +22,7 @@ class ChargingPreviewActivity : Activity() {\n    private var chargingVideo: Vid
             return
         }
         val video = VideoView(this)
+        chargingVideo = video
         setContentView(video)
         video.setVideoURI(uri)
         video.setOnPreparedListener { player ->
@@ -35,7 +37,8 @@ class ChargingPreviewActivity : Activity() {\n    private var chargingVideo: Vid
     }
 
     override fun onDestroy() {
-        chargingVideo?.stopPlayback()\n        chargingVideo = null
+        chargingVideo?.stopPlayback()
+        chargingVideo = null
         super.onDestroy()
     }
 }
