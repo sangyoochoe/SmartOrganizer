@@ -20,7 +20,7 @@
                 <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
         </activity>
-        <activity android:name=".WallpaperStudioActivity" android:exported="false" />
+        <service android:name=".VideoWallpaperService" android:label="Smart Organizer 동영상 월페이퍼" android:permission="android.permission.BIND_WALLPAPER" android:exported="true">\n            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>\n            <meta-data android:name="android.service.wallpaper" android:resource="@xml/video_wallpaper" />\n        </service>\n        <activity android:name=".WallpaperStudioActivity" android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true">
