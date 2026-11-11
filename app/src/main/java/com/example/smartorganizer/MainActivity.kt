@@ -39,6 +39,7 @@ class MainActivity : Activity() {
     private lateinit var archiveButton: Button
     private lateinit var historyButton: Button
     private lateinit var launcherButton: Button
+    private lateinit var wallpaperButton: Button
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -108,6 +109,10 @@ class MainActivity : Activity() {
             text = "설치된 앱 목록 및 분류"
             setOnClickListener { showLaunchableApps() }
         }
+        wallpaperButton = Button(this).apply {
+            text = "월페이퍼 스튜디오 (사진·동영상)"
+            setOnClickListener { startActivity(Intent(this@MainActivity, WallpaperStudioActivity::class.java)) }
+        }
         launcherButton = Button(this).apply {
             text = "사진 기반 나만의 홈 화면 열기"
             setOnClickListener { startActivity(Intent(this@MainActivity, LauncherActivity::class.java)) }
@@ -123,6 +128,7 @@ class MainActivity : Activity() {
             addView(archiveButton)
             addView(historyButton)
             addView(appsButton)
+            addView(wallpaperButton)
             addView(launcherButton)
         }
         val scroll = ScrollView(this)
