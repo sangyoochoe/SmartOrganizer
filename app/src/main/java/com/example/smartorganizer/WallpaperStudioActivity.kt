@@ -72,6 +72,10 @@ class WallpaperStudioActivity : Activity() {
         buttons.addView(Button(this).apply { text = "외부 화면용 저장"; setOnClickListener { saveFoldWallpaper("folded_wallpaper_uri") } })
         buttons.addView(Button(this).apply { text = "내부 화면용 저장"; setOnClickListener { saveFoldWallpaper("expanded_wallpaper_uri") } })
         outer.addView(buttons)
+        outer.addView(Button(this).apply {
+            text = "✨ AI 배경화면 제작 스튜디오"
+            setOnClickListener { startActivity(Intent(this@WallpaperStudioActivity, ImageCreatorActivity::class.java)) }
+        })
         outer.addView(TextView(this).apply {
             text = "Fold7 전용 기본 배경 · 충전 아트"
             textSize = 18f
