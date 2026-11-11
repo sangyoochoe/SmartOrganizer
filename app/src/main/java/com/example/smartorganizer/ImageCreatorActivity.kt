@@ -24,38 +24,109 @@ class ImageCreatorActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) { super.onCreate(savedInstanceState); buildUi() }
 
     private fun buildUi() {
+        val bg = 0xff07101b.toInt()
+        val panel = 0xff101d2d.toInt()
+        val cyan = 0xff72eee2.toInt()
+        val muted = 0xff8395aa.toInt()
+        fun rounded(color: Int, radius: Float, stroke: Int = 0): android.graphics.drawable.GradientDrawable =
+            android.graphics.drawable.GradientDrawable().apply {
+                setColor(color); cornerRadius = dp(radius.toInt()).toFloat()
+                if (stroke != 0) setStroke(dp(1), stroke)
+            }
+        fun styleButton(button: Button, primary: Boolean = false) {
+            button.isAllCaps = false; button.textSize = 13f
+            button.setTextColor(if (primary) bg else 0xffd7e6f1.toInt())
+            button.background = rounded(if (primary) cyan else panel, 13f, if (primary) 0 else 0xff293d50.toInt())
+            button.minHeight = dp(48)
+        }
+
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(16), dp(16), dp(12))
-            setBackgroundColor(Color.rgb(15, 19, 31))
+            setPadding(dp(22), dp(18), dp(22), dp(18))
+            setBackgroundColor(bg)
         }
-        root.addView(TextView(this).apply { text = "AI 배경화면 크리에이터"; textSize = 24f; setTextColor(Color.WHITE) })
-        root.addView(TextView(this).apply {
-            text = "사진에 빛·오라·불꽃 효과를 합성하고 Fold7 배경으로 저장하세요."
-            textSize = 13f; setTextColor(0xffc4cada.toInt())
+        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        header.addView(TextView(this).apply {
+            text = "✦  SMART ORGANIZER"; textSize = 15f; setTextColor(cyan); typeface = Typeface.DEFAULT_BOLD
+        }, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(TextView(this).apply {
+            text = "FOLD7 WALLPAPER LAB"; textSize = 9f; setTextColor(muted)
         })
+        root.addView(header)
+        root.addView(TextView(this).apply {
+            text = "나만의 배경을\n완성해 보세요"
+            textSize = 27f; setTextColor(Color.WHITE); typeface = Typeface.DEFAULT_BOLD
+            setPadding(0, dp(18), 0, dp(4))
+        })
+        root.addView(TextView(this).apply {
+            text = "이미지를 고르고 분위기를 선택한 뒤, Fold 화면에 맞춰 저장합니다."
+            textSize = 12f; setTextColor(muted)
+        })
+        val steps = TextView(this).apply {
+            text = "① 이미지 선택     ─────     ② 효과 선택     ─────     ③ 저장"
+            textSize = 10f; setTextColor(cyan); setPadding(0, dp(16), 0, dp(12))
+        }
+        root.addView(steps)
+
+        val arena = LinearLayout(this).apply {
+            orientation = if (resources.configuration.screenWidthDp >= 600) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+        }
+        val artColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        preview = EffectPreview().apply {
+            background = rounded(0xff0c1c30.toInt(), 20f, 0xff29465a.toInt())
+        }
+        artColumn.addView(preview, LinearLayout.LayoutParams(-1, if (resources.configuration.screenWidthDp >= 600) -1 else dp(310), 1f))
+        artColumn.addView(TextView(this).apply {
+            text = "LIVE PREVIEW   ·   GALAXY Z FOLD7"
+            textSize = 9f; setTextColor(muted); setPadding(dp(4), dp(10), 0, dp(8))
+        })
+        arena.addView(artColumn, LinearLayout.LayoutParams(0, -1, if (resources.configuration.screenWidthDp >= 600) 1.08f else 1f))
+
+        val controls = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(if (resources.configuration.screenWidthDp >= 600) dp(22) else 0, dp(8), 0, 0)
+        }
         prompt = EditText(this).apply {
-            hint = "장면 묘사: 은하수 속 전사, 푸른 번개를 두른 용…"
-            setTextColor(Color.WHITE); setHintTextColor(0xff9ca8bd.toInt()); minLines = 2
+            hint = "예: 은하수 속 전사, 푸른 번개를 두른 용"
+            setTextColor(Color.WHITE); setHintTextColor(muted); minLines = 2; textSize = 13f
+            background = rounded(panel, 12f, 0xff293d50.toInt())
+            setPadding(dp(12), dp(10), dp(12), dp(10))
         }
-        root.addView(prompt)
-        val top = LinearLayout(this).apply { gravity = Gravity.CENTER }
-        top.addView(Button(this).apply { text = "사진 불러오기"; setOnClickListener { pickImage() } })
-        top.addView(Button(this).apply { text = "AI 이미지 만들기"; setOnClickListener { openAiGenerator() } })
-        root.addView(top)
-        preview = EffectPreview()
-        root.addView(preview, LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(10); bottomMargin = dp(10) })
-        val effects = LinearLayout(this).apply { gravity = Gravity.CENTER }
-        listOf("오라" to Effect.AURA, "불꽃" to Effect.FIRE, "번개" to Effect.LIGHTNING, "은하" to Effect.GALAXY, "원본" to Effect.NONE).forEach { (label, value) ->
-            effects.addView(Button(this).apply { text = label; textSize = 11f; setOnClickListener { effect = value; generated = null; preview.invalidate() } },
-                LinearLayout.LayoutParams(0, dp(48), 1f))
+        controls.addView(TextView(this).apply { text = "01  ·  이미지"; textSize = 11f; setTextColor(cyan); setPadding(0, dp(4), 0, dp(7)) })
+        val importRow = LinearLayout(this).apply { gravity = Gravity.CENTER }
+        val pick = Button(this).apply { text = "사진 불러오기"; styleButton(this) { } }
+        styleButton(pick)
+        pick.setOnClickListener { pickImage() }
+        val ai = Button(this).apply { text = "AI 이미지 생성" }
+        styleButton(ai, true); ai.setOnClickListener { openAiGenerator() }
+        importRow.addView(pick, LinearLayout.LayoutParams(0, dp(50), 1f).apply { marginEnd = dp(6) })
+        importRow.addView(ai, LinearLayout.LayoutParams(0, dp(50), 1f).apply { marginStart = dp(6) })
+        controls.addView(importRow)
+        controls.addView(prompt, LinearLayout.LayoutParams(-1, dp(76)).apply { topMargin = dp(8) })
+        controls.addView(TextView(this).apply { text = "02  ·  분위기 선택"; textSize = 11f; setTextColor(cyan); setPadding(0, dp(17), 0, dp(7)) })
+        val effects = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        listOf("에너지 오라" to Effect.AURA, "불꽃 파동" to Effect.FIRE, "푸른 번개" to Effect.LIGHTNING, "은하수" to Effect.GALAXY, "원본 이미지" to Effect.NONE).forEach { (label, value) ->
+            val choice = Button(this).apply { text = "◇   $label"; textAlignment = View.TEXT_ALIGNMENT_VIEW_START }
+            styleButton(choice)
+            choice.setOnClickListener {
+                effect = value; generated = null; preview.invalidate()
+                status.text = "$label 효과를 선택했습니다. 저장 전에 미리보기를 확인하세요."
+            }
+            effects.addView(choice, LinearLayout.LayoutParams(-1, dp(43)).apply { bottomMargin = dp(5) })
         }
-        root.addView(effects)
-        status = TextView(this).apply { text = "사진을 선택하거나 AI 이미지 생성으로 이동하세요."; textSize = 12f; setTextColor(0xffc4cada.toInt()) }
-        root.addView(status)
-        root.addView(Button(this).apply { text = "효과 적용 · PNG로 저장"; setOnClickListener { saveComposite() } })
-        root.addView(Button(this).apply { text = "현재 이미지 배경화면 적용"; setOnClickListener { applyWallpaper() } })
-        setContentView(ScrollView(this).apply { addView(root) })
+        controls.addView(effects)
+        status = TextView(this).apply {
+            text = "이미지를 선택하거나 AI 생성기를 열어 시작하세요."
+            textSize = 11f; setTextColor(muted); setPadding(0, dp(8), 0, dp(8))
+        }
+        controls.addView(status)
+        val save = Button(this).apply { text = "효과 적용 · PNG 저장"; styleButton(this, true); setOnClickListener { saveComposite() } }
+        controls.addView(save, LinearLayout.LayoutParams(-1, dp(52)))
+        val apply = Button(this).apply { text = "배경화면으로 적용"; styleButton(this); setOnClickListener { applyWallpaper() } }
+        controls.addView(apply, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(7) })
+        arena.addView(controls, LinearLayout.LayoutParams(0, -1, if (resources.configuration.screenWidthDp >= 600) .92f else 1f))
+        root.addView(arena, LinearLayout.LayoutParams(-1, 0, 1f))
+        setContentView(root)
     }
 
     private fun pickImage() {
