@@ -20,7 +20,15 @@
                 <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
         </activity>
-        <service android:name=".VideoWallpaperService" android:label="Smart Organizer 동영상 월페이퍼" android:permission="android.permission.BIND_WALLPAPER" android:exported="true">\n            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>\n            <meta-data android:name="android.service.wallpaper" android:resource="@xml/video_wallpaper" />\n        </service>\n        <activity android:name=".WallpaperStudioActivity" android:exported="false" />
+        <service android:name=".VideoWallpaperService" android:label="Smart Organizer 동영상 월페이퍼" android:permission="android.permission.BIND_WALLPAPER" android:exported="true">
+            <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
+            <meta-data android:name="android.service.wallpaper" android:resource="@xml/video_wallpaper" />
+        </service>
+        <activity android:name=".WallpaperStudioActivity" android:exported="false" />
+        <activity android:name=".ChargingPreviewActivity" android:exported="false" />
+        <receiver android:name=".ChargingReceiver" android:enabled="true" android:exported="false">
+            <intent-filter><action android:name="android.intent.action.ACTION_POWER_CONNECTED" /></intent-filter>
+        </receiver>
         <activity
             android:name=".MainActivity"
             android:exported="true">
