@@ -94,7 +94,7 @@ class ImageCreatorActivity : Activity() {
         }
         controls.addView(TextView(this).apply { text = "01  ·  이미지"; textSize = 11f; setTextColor(cyan); setPadding(0, dp(4), 0, dp(7)) })
         val importRow = LinearLayout(this).apply { gravity = Gravity.CENTER }
-        val pick = Button(this).apply { text = "사진 불러오기"; styleButton(this) { } }
+        val pick = Button(this).apply { text = "사진 불러오기" }
         styleButton(pick)
         pick.setOnClickListener { pickImage() }
         val ai = Button(this).apply { text = "AI 이미지 생성" }
