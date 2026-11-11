@@ -182,6 +182,19 @@ class WallpaperStudioActivity : Activity() {
         Toast.makeText(this, "충전 연결 시 영상 알림을 표시합니다. 알림을 눌러 미리보기를 여세요.", Toast.LENGTH_LONG).show()
     }
 
+
+    @Deprecated("Legacy permission callback retained for compatibility")
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 7201 && grantResults.isNotEmpty() &&
+            grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            prefs.edit().putBoolean("charging_alert_enabled", true).apply()
+            Toast.makeText(this, "충전 연결 시 알림을 표시합니다.", Toast.LENGTH_LONG).show()
+        } else if (requestCode == 7201) {
+            Toast.makeText(this, "충전 알림을 사용하려면 알림 권한이 필요합니다.", Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun setLiveVideoWallpaper() {
         val uri = selectedUri
         if (uri == null || !selectedIsVideo) {
