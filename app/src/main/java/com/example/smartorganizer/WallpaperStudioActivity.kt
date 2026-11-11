@@ -64,9 +64,12 @@ class WallpaperStudioActivity : Activity() {
         })
         val buttons = LinearLayout(this).apply { gravity = Gravity.CENTER }
         buttons.addView(Button(this).apply { text = "사진 추가"; setOnClickListener { pick("image/*", 7101) } })
-        buttons.addView(Button(this).apply { text = "동영상 추가"; setOnClickListener { pick("video/*", 7102) } })\n        buttons.addView(Button(this).apply { text = "동영상 라이브 배경"; setOnClickListener { setLiveVideoWallpaper() } })
-        buttons.addView(Button(this).apply { text = "접힌 화면"; setOnClickListener { target = WallpaperManager.FLAG_SYSTEM; Toast.makeText(this@WallpaperStudioActivity, "홈 배경 적용 대상으로 선택됨", Toast.LENGTH_SHORT).show() } })
+        buttons.addView(Button(this).apply { text = "동영상 추가"; setOnClickListener { pick("video/*", 7102) } })
+        buttons.addView(Button(this).apply { text = "동영상 라이브 배경"; setOnClickListener { setLiveVideoWallpaper() } })
+        buttons.addView(Button(this).apply { text = "홈 배경"; setOnClickListener { target = WallpaperManager.FLAG_SYSTEM; Toast.makeText(this@WallpaperStudioActivity, "홈 배경 적용 대상으로 선택됨", Toast.LENGTH_SHORT).show() } })
         buttons.addView(Button(this).apply { text = "잠금 화면"; setOnClickListener { target = WallpaperManager.FLAG_LOCK; Toast.makeText(this@WallpaperStudioActivity, "잠금 화면 적용 대상으로 선택됨", Toast.LENGTH_SHORT).show() } })
+        buttons.addView(Button(this).apply { text = "외부 화면용 저장"; setOnClickListener { saveFoldWallpaper("folded_wallpaper_uri") } })
+        buttons.addView(Button(this).apply { text = "내부 화면용 저장"; setOnClickListener { saveFoldWallpaper("expanded_wallpaper_uri") } })
         outer.addView(buttons)
         preview = FrameLayout(this).apply {
             setBackgroundColor(0xff20242c.toInt())
@@ -76,6 +79,9 @@ class WallpaperStudioActivity : Activity() {
         outer.addView(Button(this).apply {
             text = "선택한 사진을 배경화면으로 적용"
             setOnClickListener { applyImage() }
+        })
+        outer.addView(Button(this).apply {
+            text = "충전 시 알림 사용"; setOnClickListener { enableChargingAlert() }
         })
         outer.addView(Button(this).apply {
             text = "선택 항목 삭제"
@@ -153,6 +159,28 @@ class WallpaperStudioActivity : Activity() {
         }
     }
 
+
+
+    private fun saveFoldWallpaper(key: String) {
+        val uri = selectedUri
+        if (uri == null || selectedIsVideo) {
+            Toast.makeText(this, "외부·내부 화면용으로 저장할 사진을 선택하세요.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        prefs.edit().putString(key, uri.toString()).apply()
+        val label = if (key == "folded_wallpaper_uri") "커버(외부) 화면" else "내부 화면"
+        Toast.makeText(this, "$label 전용 배경으로 보관했습니다. 실제 적용은 삼성 배경화면 설정에서 해당 화면을 선택해야 합니다.", Toast.LENGTH_LONG).show()
+    }
+
+    private fun enableChargingAlert() {
+        if (android.os.Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 7201)
+            return
+        }
+        getSharedPreferences("wallpaper_studio", MODE_PRIVATE).edit().putBoolean("charging_alert_enabled", true).apply()
+        Toast.makeText(this, "충전 연결 시 영상 알림을 표시합니다. 알림을 눌러 미리보기를 여세요.", Toast.LENGTH_LONG).show()
+    }
 
     private fun setLiveVideoWallpaper() {
         val uri = selectedUri
