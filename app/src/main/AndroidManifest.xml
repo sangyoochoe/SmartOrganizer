@@ -20,6 +20,7 @@
                 <category android:name="android.intent.category.DEFAULT"/>
             </intent-filter>
         </activity>
+        <activity android:name=".WallpaperStudioActivity" android:exported="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true">
