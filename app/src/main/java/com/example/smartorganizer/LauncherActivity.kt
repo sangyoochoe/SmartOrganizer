@@ -58,6 +58,7 @@ class LauncherActivity : Activity() {
             gravity = Gravity.CENTER_VERTICAL
             addView(title, LinearLayout.LayoutParams(0, -2, 1f))
             addView(actionButton("배경") { chooseWallpaper() })
+            addView(actionButton("월페이퍼") { startActivity(Intent(this@LauncherActivity, WallpaperStudioActivity::class.java)) })
             addView(actionButton("AI 배치") { analyzePhotoAndSuggest() })
             addView(actionButton("앱 +") { chooseApps() })
             addView(actionButton("편집") { editing = !editing; title.text = if (editing) "아이콘을 길게 눌러 배치 편집" else "나의 공간 · $layoutName" })
