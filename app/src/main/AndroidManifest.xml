@@ -26,6 +26,7 @@
             <intent-filter><action android:name="android.service.wallpaper.WallpaperService" /></intent-filter>
             <meta-data android:name="android.service.wallpaper" android:resource="@xml/video_wallpaper" />
         </service>
+        <activity android:name=".ImageCreatorActivity" android:exported="false" />
         <activity android:name=".WallpaperStudioActivity" android:exported="false" />
         <activity android:name=".ChargingPreviewActivity" android:exported="false" />
         <receiver android:name=".ChargingReceiver" android:enabled="true" android:exported="false">
