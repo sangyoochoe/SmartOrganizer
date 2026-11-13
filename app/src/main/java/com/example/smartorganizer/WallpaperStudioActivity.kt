@@ -3,6 +3,10 @@ package com.example.smartorganizer
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.WallpaperManager
+import android.app.TimePickerDialog
+import android.app.AlarmManager
+import android.app.PendingIntent
+import java.util.Calendar
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -105,6 +109,8 @@ class WallpaperStudioActivity : Activity() {
             text = "선택한 사진을 배경화면으로 적용"
             setOnClickListener { applyImage() }
         })
+        outer.addView(Button(this).apply { text = "⏰ 선택 사진을 매일 자동 변경에 추가"; setOnClickListener { addDailySchedule() } })
+        outer.addView(Button(this).apply { text = "자동 변경 일정 보기 / 모두 삭제"; setOnClickListener { showSchedules() } })
         outer.addView(Button(this).apply {
             text = "충전 시 알림 사용"; setOnClickListener { enableChargingAlert() }
         })
@@ -143,9 +149,11 @@ class WallpaperStudioActivity : Activity() {
         val uri = data?.data ?: return
         try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
         val isVideo = requestCode == 7102
-        if (media.none { it.first == uri }) media.add(uri to isVideo)
+        val isGif = requestCode == 7103
+        if (media.none { it.first == uri }) media.add(uri to (isVideo || isGif))
         selectedUri = uri
-        selectedIsVideo = isVideo
+        selectedIsVideo = isVideo || isGif
+        prefs.edit().putBoolean("selected_is_gif", isGif).apply()
         persist()
         showPreview()
         renderList()
@@ -200,6 +208,34 @@ class WallpaperStudioActivity : Activity() {
 
 
 
+    private fun addDailySchedule() {
+        val uri = selectedUri
+        if (uri == null || selectedIsVideo) { Toast.makeText(this, "자동 변경에는 사진을 선택하세요.", Toast.LENGTH_SHORT).show(); return }
+        val now = Calendar.getInstance()
+        TimePickerDialog(this, { _, hour, minute ->
+            val time = String.format(java.util.Locale.US, "%02d:%02d", hour, minute)
+            val rows = (prefs.getString("daily_wallpaper_schedule", "") ?: "").split("\n").filter { it.isNotBlank() && !it.endsWith("|" + uri.toString()) }.toMutableList()
+            rows.add(time + "|" + uri.toString())
+            prefs.edit().putString("daily_wallpaper_schedule", rows.sorted().joinToString("\n")).apply()
+            scheduleWallpaperAlarm()
+            Toast.makeText(this, "매일 " + time + "에 배경을 변경하도록 저장했습니다.", Toast.LENGTH_LONG).show()
+        }, now.get(Calendar.HOUR_OF_DAY), now.get(Calendar.MINUTE), true).show()
+    }
+
+    private fun showSchedules() {
+        val rows = (prefs.getString("daily_wallpaper_schedule", "") ?: "").split("\n").filter { it.isNotBlank() }
+        val message = if (rows.isEmpty()) "등록된 일정이 없습니다." else rows.joinToString("\n") { it.substringBefore("|") + " · " + it.substringAfter("|").substringAfterLast("/") }
+        AlertDialog.Builder(this).setTitle("매일 배경 자동 변경").setMessage(message)
+            .setNeutralButton("모두 삭제") { _, _ -> prefs.edit().remove("daily_wallpaper_schedule").remove("daily_wallpaper_last_applied").apply(); Toast.makeText(this, "일정을 삭제했습니다.", Toast.LENGTH_SHORT).show() }
+            .setPositiveButton("확인", null).show()
+    }
+
+    private fun scheduleWallpaperAlarm() {
+        val alarm = getSystemService(ALARM_SERVICE) as AlarmManager
+        val intent = Intent(this, DailyWallpaperReceiver::class.java).setAction(DailyWallpaperReceiver.ACTION_TICK)
+        val pending = PendingIntent.getBroadcast(this, 7310, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        alarm.setInexactRepeating(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 60_000L, 15 * 60_000L, pending)
+    }
     private fun saveFoldWallpaper(key: String) {
         val uri = selectedUri
         if (uri == null || selectedIsVideo) {
@@ -237,10 +273,11 @@ class WallpaperStudioActivity : Activity() {
     private fun setLiveVideoWallpaper() {
         val uri = selectedUri
         if (uri == null || !selectedIsVideo) {
-            Toast.makeText(this, "먼저 동영상을 선택하세요.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "먼저 동영상 또는 GIF를 선택하세요.", Toast.LENGTH_SHORT).show()
             return
         }
-        prefs.edit().putString("live_video_uri", uri.toString()).apply()
+        val isGif = contentResolver.getType(uri)?.contains("gif", ignoreCase = true) == true || prefs.getBoolean("selected_is_gif", false)
+        prefs.edit().putString("live_video_uri", uri.toString()).putString("live_media_type", if (isGif) "gif" else "video").apply()
         try {
             val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
                 putExtra(WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
