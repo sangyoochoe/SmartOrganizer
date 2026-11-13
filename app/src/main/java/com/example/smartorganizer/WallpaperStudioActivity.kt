@@ -10,6 +10,8 @@ import java.util.Calendar
 import android.content.Intent
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.provider.MediaStore
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.Gravity
 import android.widget.*
@@ -68,6 +70,7 @@ class WallpaperStudioActivity : Activity() {
             textSize = 13f
         })
         val buttons = LinearLayout(this).apply { gravity = Gravity.CENTER }
+        buttons.addView(Button(this).apply { text = "전체 사진·동영상 불러오기"; setOnClickListener { loadAllDeviceMedia() } })
         buttons.addView(Button(this).apply { text = "사진 추가"; setOnClickListener { pick("image/*", 7101) } })
         buttons.addView(Button(this).apply { text = "동영상 추가"; setOnClickListener { pick("video/*", 7102) } })
         buttons.addView(Button(this).apply { text = "GIF 추가"; setOnClickListener { pick("image/gif", 7103) } })
@@ -133,6 +136,45 @@ class WallpaperStudioActivity : Activity() {
         renderList()
     }
 
+
+    private fun loadAllDeviceMedia() {
+        val needed = if (android.os.Build.VERSION.SDK_INT >= 33) {
+            arrayOf(android.Manifest.permission.READ_MEDIA_IMAGES, android.Manifest.permission.READ_MEDIA_VIDEO)
+        } else arrayOf(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+        val missing = needed.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        if (missing.isNotEmpty()) {
+            requestPermissions(missing.toTypedArray(), 7250)
+            return
+        }
+        importDeviceMedia()
+    }
+
+    private fun importDeviceMedia() {
+        val collection = MediaStore.Files.getContentUri("external")
+        val projection = arrayOf(MediaStore.Files.FileColumns._ID, MediaStore.Files.FileColumns.MEDIA_TYPE)
+        val selection = "(" + MediaStore.Files.FileColumns.MEDIA_TYPE + "=? OR " + MediaStore.Files.FileColumns.MEDIA_TYPE + "=?)"
+        val args = arrayOf(MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(), MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString())
+        var added = 0
+        try {
+            contentResolver.query(collection, projection, selection, args, MediaStore.Files.FileColumns.DATE_ADDED + " DESC")?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+                val typeCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns.MEDIA_TYPE)
+                while (cursor.moveToNext()) {
+                    val id = cursor.getLong(idCol)
+                    val isVideo = cursor.getInt(typeCol) == MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO
+                    val base = if (isVideo) MediaStore.Video.Media.EXTERNAL_CONTENT_URI else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
+                    val uri = Uri.withAppendedPath(base, id.toString())
+                    if (media.none { it.first == uri }) { media.add(uri to isVideo); added++ }
+                }
+            }
+            persist()
+            renderList()
+            Toast.makeText(this, "기기 미디어 " + media.size + "개를 불러왔습니다. 새로 추가 " + added + "개", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "미디어를 읽지 못했습니다: " + (e.localizedMessage ?: "권한을 확인하세요."), Toast.LENGTH_LONG).show()
+        }
+    }
+
     private fun pick(type: String, request: Int) {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             this.type = type
@@ -172,7 +214,7 @@ class WallpaperStudioActivity : Activity() {
         preview.removeAllViews()
         if (selectedBuiltinResId != 0) {
             preview.addView(ImageView(this).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
+                scaleType = ImageView.ScaleType.FIT_CENTER
                 setImageResource(selectedBuiltinResId)
             }, FrameLayout.LayoutParams(-1, -1))
             return
@@ -261,6 +303,11 @@ class WallpaperStudioActivity : Activity() {
     @Deprecated("Legacy permission callback retained for compatibility")
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 7250) {
+            if (grantResults.any { it == PackageManager.PERMISSION_GRANTED }) importDeviceMedia()
+            else Toast.makeText(this, "전체 미디어를 보려면 사진·동영상 접근을 허용하세요.", Toast.LENGTH_LONG).show()
+            return
+        }
         if (requestCode == 7201 && grantResults.isNotEmpty() &&
             grantResults[0] == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             prefs.edit().putBoolean("charging_alert_enabled", true).apply()
