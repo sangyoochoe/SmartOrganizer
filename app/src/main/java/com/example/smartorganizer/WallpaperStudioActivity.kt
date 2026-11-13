@@ -66,7 +66,8 @@ class WallpaperStudioActivity : Activity() {
         val buttons = LinearLayout(this).apply { gravity = Gravity.CENTER }
         buttons.addView(Button(this).apply { text = "사진 추가"; setOnClickListener { pick("image/*", 7101) } })
         buttons.addView(Button(this).apply { text = "동영상 추가"; setOnClickListener { pick("video/*", 7102) } })
-        buttons.addView(Button(this).apply { text = "동영상 라이브 배경"; setOnClickListener { setLiveVideoWallpaper() } })
+        buttons.addView(Button(this).apply { text = "GIF 추가"; setOnClickListener { pick("image/gif", 7103) } })
+        buttons.addView(Button(this).apply { text = "동영상/GIF 라이브 배경"; setOnClickListener { setLiveVideoWallpaper() } })
         buttons.addView(Button(this).apply { text = "홈 배경"; setOnClickListener { target = WallpaperManager.FLAG_SYSTEM; Toast.makeText(this@WallpaperStudioActivity, "홈 배경 적용 대상으로 선택됨", Toast.LENGTH_SHORT).show() } })
         buttons.addView(Button(this).apply { text = "잠금 화면"; setOnClickListener { target = WallpaperManager.FLAG_LOCK; Toast.makeText(this@WallpaperStudioActivity, "잠금 화면 적용 대상으로 선택됨", Toast.LENGTH_SHORT).show() } })
         buttons.addView(Button(this).apply { text = "외부 화면용 저장"; setOnClickListener { saveFoldWallpaper("folded_wallpaper_uri") } })
@@ -138,7 +139,7 @@ class WallpaperStudioActivity : Activity() {
     @Deprecated("Legacy result API retained for compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode != RESULT_OK || requestCode !in 7101..7102) return
+        if (resultCode != RESULT_OK || requestCode !in 7101..7103) return
         val uri = data?.data ?: return
         try { contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
         val isVideo = requestCode == 7102
