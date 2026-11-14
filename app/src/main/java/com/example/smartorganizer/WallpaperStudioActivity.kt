@@ -13,6 +13,8 @@ import android.net.Uri
 import android.provider.MediaStore
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Build
+import android.util.Size
 import android.view.Gravity
 import android.widget.*
 import android.media.MediaPlayer
@@ -232,7 +234,13 @@ class WallpaperStudioActivity : Activity() {
             player.setOnPreparedListener { mp -> mp.isLooping = true; player.start() }
             player.setOnErrorListener { _, _, _ -> Toast.makeText(this, "이 동영상 형식은 미리보기할 수 없습니다.", Toast.LENGTH_SHORT).show(); true }
         } else {
-            val image = ImageView(this).apply { scaleType = ImageView.ScaleType.FIT_CENTER; setImageURI(uri) }
+            val image = ImageView(this).apply {
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                try {
+                    if (Build.VERSION.SDK_INT >= 29) setImageBitmap(contentResolver.loadThumbnail(uri, Size(dp(900), dp(1200)), null))
+                    else setImageURI(uri)
+                } catch (_: Exception) { setImageURI(uri) }
+            }
             preview.addView(image, FrameLayout.LayoutParams(-1, -1))
         }
     }
@@ -243,7 +251,7 @@ class WallpaperStudioActivity : Activity() {
             list.addView(TextView(this).apply { text = "기기 갤러리에서 사진·동영상을 불러오면 여기에 표시됩니다." })
             return
         }
-        val grid = GridLayout(this).apply { columnCount = 4; useDefaultMargins = true }
+        val grid = GridLayout(this).apply { columnCount = if (resources.configuration.screenWidthDp >= 600) 6 else 3; useDefaultMargins = true }
         media.forEach { (uri, video) ->
             val tile = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -259,7 +267,10 @@ class WallpaperStudioActivity : Activity() {
             val thumb = ImageView(this).apply {
                 layoutParams = LinearLayout.LayoutParams(-1, dp(92))
                 scaleType = ImageView.ScaleType.FIT_CENTER
-                if (video) setImageResource(android.R.drawable.ic_media_play) else setImageURI(uri)
+                if (video) setImageResource(android.R.drawable.ic_media_play) else try {
+                    if (Build.VERSION.SDK_INT >= 29) setImageBitmap(contentResolver.loadThumbnail(uri, Size(dp(220), dp(220)), null))
+                    else setImageURI(uri)
+                } catch (_: Exception) { setImageResource(android.R.drawable.ic_menu_gallery) }
             }
             tile.addView(thumb)
             tile.addView(TextView(this).apply { text = if (video) "▶ 동영상" else "사진"; textSize = 11f; gravity = Gravity.CENTER; maxLines = 1 })
