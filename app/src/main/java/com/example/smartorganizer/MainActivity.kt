@@ -688,7 +688,8 @@ class MainActivity : Activity() {
         if (message != null) summary.text = message
         scanButton.isEnabled = !busy
         runScanButton.isEnabled = !busy && (selectedTrees.isNotEmpty() || selectedLooseFiles.isNotEmpty())
-        addFilesButton.isEnabled = !busy\n        bulkDeleteButton.isEnabled = !busy && checkedEntries.isNotEmpty()
+        addFilesButton.isEnabled = !busy
+        bulkDeleteButton.isEnabled = !busy && checkedEntries.isNotEmpty()
         manageFoldersButton.isEnabled = !busy
         duplicateButton.isEnabled = !busy && entries.any { !it.directory }
         insightButton.isEnabled = !busy && entries.any { !it.directory }
