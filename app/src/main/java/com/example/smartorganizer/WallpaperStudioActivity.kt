@@ -70,7 +70,7 @@ class WallpaperStudioActivity : Activity() {
             text = "사진·동영상을 모아보고 Fold 화면별 배경을 관리합니다."
             textSize = 13f
         })
-        val buttons = LinearLayout(this).apply { gravity = Gravity.CENTER }
+        val buttons = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         buttons.addView(Button(this).apply { text = "갤러리 전체 불러오기"; setOnClickListener { loadAllDeviceMedia() } })
         buttons.addView(Button(this).apply { text = "사진 추가"; setOnClickListener { pick("image/*", 7101) } })
         buttons.addView(Button(this).apply { text = "동영상 추가"; setOnClickListener { pick("video/*", 7102) } })
@@ -106,7 +106,7 @@ class WallpaperStudioActivity : Activity() {
         outer.addView(builtins)
         preview = FrameLayout(this).apply {
             setBackgroundColor(0xff20242c.toInt())
-            layoutParams = LinearLayout.LayoutParams(-1, 0, 1f).apply { topMargin = dp(12); bottomMargin = dp(12) }
+            layoutParams = LinearLayout.LayoutParams(-1, dp(280)).apply { topMargin = dp(12); bottomMargin = dp(12) }
         }
         outer.addView(preview)
         outer.addView(Button(this).apply {
@@ -132,7 +132,7 @@ class WallpaperStudioActivity : Activity() {
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         val scroll = ScrollView(this).apply { addView(list) }
         outer.addView(scroll, LinearLayout.LayoutParams(-1, dp(180)))
-        setContentView(outer)
+        setContentView(ScrollView(this).apply { isFillViewport = true; addView(outer) })
         showPreview()
         renderList()
     }
