@@ -687,7 +687,8 @@ class MainActivity : Activity() {
     private fun setBusy(busy: Boolean, message: String? = null) {
         if (message != null) summary.text = message
         scanButton.isEnabled = !busy
-        runScanButton.isEnabled = !busy && (selectedTrees.isNotEmpty() || selectedLooseFiles.isNotEmpty())\n        addFilesButton.isEnabled = !busy\n        bulkDeleteButton.isEnabled = !busy && checkedEntries.isNotEmpty()
+        runScanButton.isEnabled = !busy && (selectedTrees.isNotEmpty() || selectedLooseFiles.isNotEmpty())
+        addFilesButton.isEnabled = !busy\n        bulkDeleteButton.isEnabled = !busy && checkedEntries.isNotEmpty()
         manageFoldersButton.isEnabled = !busy
         duplicateButton.isEnabled = !busy && entries.any { !it.directory }
         insightButton.isEnabled = !busy && entries.any { !it.directory }
@@ -716,7 +717,8 @@ class MainActivity : Activity() {
     }
 
     companion object {
-        private const val REQUEST_TREE = 7101\n        private const val REQUEST_FILES = 7102
+        private const val REQUEST_TREE = 7101
+        private const val REQUEST_FILES = 7102
         private const val LARGE_FILE_BYTES = 100L * 1024L * 1024L
         private const val OLD_FILE_AGE = 180L * 24L * 60L * 60L * 1000L
         private val ARCHIVE_SCRIPT_EXTENSIONS = listOf(".sh", ".bat", ".cmd", ".ps1", ".js", ".vbs", ".py", ".jar")
