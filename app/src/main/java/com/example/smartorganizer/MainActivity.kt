@@ -150,9 +150,9 @@ class MainActivity : Activity() {
         outer.addView(summary)
         outer.addView(actions)
         outer.addView(scroll, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
+            LinearLayout.LayoutParams.MATCH_PARENT, (280 * resources.displayMetrics.density).toInt()
         ))
-        setContentView(outer)
+        setContentView(ScrollView(this).apply { isFillViewport = true; addView(outer) })
     }
 
     private fun chooseFolder() {
