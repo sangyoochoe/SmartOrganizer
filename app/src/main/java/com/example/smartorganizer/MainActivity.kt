@@ -633,17 +633,46 @@ class MainActivity : Activity() {
             }.show()
     }
 
-    private fun confirmBulkDelete() {\n        val chosen = entries.filter { checkedEntries.contains(it.uri.toString()) && !it.directory }\n        if (chosen.isEmpty()) { toast("먼저 파일 왼쪽 체크박스를 선택하세요."); return }\n        AlertDialog.Builder(this).setTitle("${chosen.size}개 파일 일괄 삭제")\n            .setMessage("선택한 파일을 삭제합니다. 되돌릴 수 없습니다. 계속할까요?")\n            .setNegativeButton("취소", null).setPositiveButton("삭제") { _, _ ->\n                var success = 0\n                chosen.forEach { entry ->\n                    val ok = try { DocumentFile.fromSingleUri(this, entry.uri)?.delete() == true } catch (_: Exception) { false }\n                    if (ok) { success++; checkedEntries.remove(entry.uri.toString()); recordOperation("일괄 삭제", entry.relativePath, "삭제 완료") }\n                }\n                toast("$success/${chosen.size}개 파일을 삭제했습니다. 권한 제한 위치는 건너뛰었을 수 있습니다.")\n                scanSelectedFolders()\n            }.show()\n    }\n\n    private fun renderEntries(items: List<Entry>) {
+    private fun confirmBulkDelete() {
+        val chosen = entries.filter { checkedEntries.contains(it.uri.toString()) && !it.directory }
+        if (chosen.isEmpty()) { toast("먼저 파일 왼쪽 체크박스를 선택하세요."); return }
+        AlertDialog.Builder(this).setTitle("${chosen.size}개 파일 일괄 삭제")
+            .setMessage("선택한 파일을 삭제합니다. 되돌릴 수 없습니다. 계속할까요?")
+            .setNegativeButton("취소", null).setPositiveButton("삭제") { _, _ ->
+                var success = 0
+                chosen.forEach { entry ->
+                    val ok = try { DocumentFile.fromSingleUri(this, entry.uri)?.delete() == true } catch (_: Exception) { false }
+                    if (ok) { success++; checkedEntries.remove(entry.uri.toString()); recordOperation("일괄 삭제", entry.relativePath, "삭제 완료") }
+                }
+                toast("$success/${chosen.size}개 파일을 삭제했습니다.")
+                scanSelectedFolders()
+            }.show()
+    }
+
+    private fun renderEntries(items: List<Entry>) {
         results.removeAllViews()
-        if (items.isEmpty()) {
-            addLine("선택한 위치에서 표시할 파일이나 폴더를 찾지 못했습니다.")
-            return
-        }
+        if (items.isEmpty()) { addLine("선택한 위치에서 표시할 파일이나 폴더를 찾지 못했습니다."); return }
         items.take(3000).forEach { item ->
-            val prefix = if (item.directory) "📁" else "📄"
+            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+            if (!item.directory) {
+                row.addView(CheckBox(this).apply {
+                    isChecked = checkedEntries.contains(item.uri.toString())
+                    setOnCheckedChangeListener { _, checked ->
+                        if (checked) checkedEntries.add(item.uri.toString()) else checkedEntries.remove(item.uri.toString())
+                        bulkDeleteButton.isEnabled = checkedEntries.isNotEmpty()
+                    }
+                })
+            }
             val detail = if (item.directory) "" else " · ${humanSize(item.size)}"
-            addLine("$prefix ${item.relativePath}$detail")
+            val label = TextView(this).apply {
+                text = (if (item.directory) "📁 " else "📄 ") + item.relativePath + detail
+                textSize = 13f; setPadding(8, 7, 4, 7)
+                setOnClickListener { if (!item.directory) showFileActions(item) }
+            }
+            row.addView(label, LinearLayout.LayoutParams(0, -2, 1f))
+            results.addView(row)
         }
+        bulkDeleteButton.isEnabled = checkedEntries.isNotEmpty()
         if (items.size > 3000) addLine("화면 표시 제한: ${items.size}개 중 처음 3,000개 표시")
     }
 
