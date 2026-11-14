@@ -27,11 +27,15 @@ class MainActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
     private val entries = mutableListOf<Entry>()
     private val selectedTrees = linkedMapOf<String, Uri>()
+    private val selectedLooseFiles = linkedMapOf<String, Uri>()
+    private val checkedEntries = linkedSetOf<String>()
     private lateinit var summary: TextView
     private lateinit var results: LinearLayout
     private lateinit var scanButton: Button
     private lateinit var runScanButton: Button
     private lateinit var manageFoldersButton: Button
+    private lateinit var addFilesButton: Button
+    private lateinit var bulkDeleteButton: Button
     private lateinit var duplicateButton: Button
     private lateinit var insightButton: Button
     private lateinit var apkButton: Button
@@ -77,6 +81,8 @@ class MainActivity : Activity() {
             isEnabled = false
             setOnClickListener { scanSelectedFolders() }
         }
+        addFilesButton = Button(this).apply { text = "＋ 폴더 밖 개별 파일 여러 개 추가"; setOnClickListener { chooseFiles() } }
+        bulkDeleteButton = Button(this).apply { text = "선택한 파일 일괄 삭제"; isEnabled = false; setOnClickListener { confirmBulkDelete() } }
         manageFoldersButton = Button(this).apply {
             text = "선택 폴더 관리"
             setOnClickListener { showSelectedFolders() }
@@ -120,6 +126,8 @@ class MainActivity : Activity() {
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(scanButton)
+            addView(addFilesButton)
+            addView(bulkDeleteButton)
             addView(runScanButton)
             addView(manageFoldersButton)
             addView(duplicateButton)
@@ -159,7 +167,21 @@ class MainActivity : Activity() {
     @Deprecated("Deprecated API retained for compatibility")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != REQUEST_TREE || resultCode != RESULT_OK) return
+        if (resultCode != RESULT_OK) return
+        if (requestCode == REQUEST_FILES) {
+            val clip = data?.clipData
+            val uris = if (clip != null) (0 until clip.itemCount).map { clip.getItemAt(it).uri } else listOfNotNull(data?.data)
+            uris.forEach { uri ->
+                val flags = (data?.flags ?: 0) and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                try { contentResolver.takePersistableUriPermission(uri, flags) } catch (_: Exception) {}
+                selectedLooseFiles[uri.toString()] = uri
+            }
+            getSharedPreferences("scan_folders", MODE_PRIVATE).edit().putStringSet("loose_files", selectedLooseFiles.keys.toSet()).apply()
+            toast("폴더 밖 개별 파일 ${uris.size}개를 추가했습니다. 루트에 놓인 파일도 선택할 수 있습니다.")
+            updateFolderSelectionUi()
+            return
+        }
+        if (requestCode != REQUEST_TREE) return
         val uri = data?.data ?: return
         val flags = data.flags and
                 (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
@@ -168,6 +190,15 @@ class MainActivity : Activity() {
         saveSelectedTrees()
         updateFolderSelectionUi()
         toast("폴더를 추가했습니다. 다른 폴더도 추가한 뒤 전체 스캔을 누르세요.")
+    }
+
+    private fun chooseFiles() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE); type = "*/*"
+            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+        startActivityForResult(intent, REQUEST_FILES)
     }
 
     private fun saveSelectedTrees() {
@@ -190,7 +221,7 @@ class MainActivity : Activity() {
         runScanButton.text = "선택한 폴더 모두 스캔 (${selectedTrees.size}개)"
         runScanButton.isEnabled = selectedTrees.isNotEmpty()
         manageFoldersButton.isEnabled = true
-        summary.text = "선택된 폴더 ${selectedTrees.size}개 · 폴더 추가 버튼을 길게 누르면 목록/해제 관리"
+        summary.text = "선택된 폴더 ${selectedTrees.size}개 · 폴더 밖 파일 ${selectedLooseFiles.size}개"
     }
 
     private fun showSelectedFolders() {
@@ -207,7 +238,7 @@ class MainActivity : Activity() {
 
     private fun scanSelectedFolders() {
         val roots = selectedTrees.values.toList()
-        if (roots.isEmpty()) { toast("먼저 폴더를 추가하세요."); return }
+        if (roots.isEmpty() && selectedLooseFiles.isEmpty()) { toast("폴더 또는 개별 파일을 추가하세요."); return }
         setBusy(true, "선택한 폴더 ${roots.size}개와 하위 폴더를 스캔 중입니다…")
         worker.execute {
             val found = mutableListOf<Entry>()
@@ -230,7 +261,7 @@ class MainActivity : Activity() {
             runOnUiThread {
                 entries.clear(); entries.addAll(found.distinctBy { it.uri.toString() })
                 val files = entries.filter { !it.directory }
-                summary.text = "전체 스캔 완료: 선택 폴더 ${roots.size}개 · 파일 ${files.size}개 · 하위 폴더 ${entries.count { it.directory }}개 · ${humanSize(files.sumOf { it.size })}" + if (inaccessible > 0) "\n일부 위치는 Android 권한 제한으로 읽지 못했습니다." else ""
+                summary.text = "전체 스캔 완료: 선택 폴더 ${roots.size}개 · 개별 파일 ${selectedLooseFiles.size}개 · 파일 ${files.size}개 · 하위 폴더 ${entries.count { it.directory }}개 · ${humanSize(files.sumOf { it.size })}" + if (inaccessible > 0) "\n일부 위치는 Android 권한 제한으로 읽지 못했습니다." else ""
                 duplicateButton.isEnabled = files.isNotEmpty(); insightButton.isEnabled = files.isNotEmpty(); apkButton.isEnabled = files.isNotEmpty()
                 archiveButton.isEnabled = files.any { it.name.endsWith(".zip", true) }
                 renderEntries(entries); setBusy(false)
@@ -602,7 +633,7 @@ class MainActivity : Activity() {
             }.show()
     }
 
-    private fun renderEntries(items: List<Entry>) {
+    private fun confirmBulkDelete() {\n        val chosen = entries.filter { checkedEntries.contains(it.uri.toString()) && !it.directory }\n        if (chosen.isEmpty()) { toast("먼저 파일 왼쪽 체크박스를 선택하세요."); return }\n        AlertDialog.Builder(this).setTitle("${chosen.size}개 파일 일괄 삭제")\n            .setMessage("선택한 파일을 삭제합니다. 되돌릴 수 없습니다. 계속할까요?")\n            .setNegativeButton("취소", null).setPositiveButton("삭제") { _, _ ->\n                var success = 0\n                chosen.forEach { entry ->\n                    val ok = try { DocumentFile.fromSingleUri(this, entry.uri)?.delete() == true } catch (_: Exception) { false }\n                    if (ok) { success++; checkedEntries.remove(entry.uri.toString()); recordOperation("일괄 삭제", entry.relativePath, "삭제 완료") }\n                }\n                toast("$success/${chosen.size}개 파일을 삭제했습니다. 권한 제한 위치는 건너뛰었을 수 있습니다.")\n                scanSelectedFolders()\n            }.show()\n    }\n\n    private fun renderEntries(items: List<Entry>) {
         results.removeAllViews()
         if (items.isEmpty()) {
             addLine("선택한 위치에서 표시할 파일이나 폴더를 찾지 못했습니다.")
@@ -627,7 +658,7 @@ class MainActivity : Activity() {
     private fun setBusy(busy: Boolean, message: String? = null) {
         if (message != null) summary.text = message
         scanButton.isEnabled = !busy
-        runScanButton.isEnabled = !busy && selectedTrees.isNotEmpty()
+        runScanButton.isEnabled = !busy && (selectedTrees.isNotEmpty() || selectedLooseFiles.isNotEmpty())\n        addFilesButton.isEnabled = !busy\n        bulkDeleteButton.isEnabled = !busy && checkedEntries.isNotEmpty()
         manageFoldersButton.isEnabled = !busy
         duplicateButton.isEnabled = !busy && entries.any { !it.directory }
         insightButton.isEnabled = !busy && entries.any { !it.directory }
@@ -656,7 +687,7 @@ class MainActivity : Activity() {
     }
 
     companion object {
-        private const val REQUEST_TREE = 7101
+        private const val REQUEST_TREE = 7101\n        private const val REQUEST_FILES = 7102
         private const val LARGE_FILE_BYTES = 100L * 1024L * 1024L
         private const val OLD_FILE_AGE = 180L * 24L * 60L * 60L * 1000L
         private val ARCHIVE_SCRIPT_EXTENSIONS = listOf(".sh", ".bat", ".cmd", ".ps1", ".js", ".vbs", ".py", ".jar")
