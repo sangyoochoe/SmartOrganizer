@@ -546,8 +546,7 @@ class MainActivity : Activity() {
         val prefs = getSharedPreferences("operation_history", MODE_PRIVATE)
         val line = "${System.currentTimeMillis()}|${action}|${original}|${result}"
         val old = prefs.getString("records", "") ?: ""
-        prefs.edit().putString("records", (old.lines().filter { it.isNotBlank() } + line).takeLast(200).joinToString("
-")).apply()
+        prefs.edit().putString("records", (old.lines().filter { it.isNotBlank() } + line).takeLast(200).joinToString("\n")).apply()
     }
 
     private fun showOperationHistory() {
@@ -558,8 +557,7 @@ class MainActivity : Activity() {
         if (records.isEmpty()) addLine("기록된 파일 변경 작업이 없습니다.")
         records.asReversed().forEach { row ->
             val parts = row.split("|", limit = 4)
-            if (parts.size == 4) addLine("${formatDate(parts[0].toLongOrNull() ?: 0L)} · ${parts[1]}
-${parts[2]} → ${parts[3]}")
+            if (parts.size == 4) addLine("${formatDate(parts[0].toLongOrNull() ?: 0L)} · ${parts[1]}\n${parts[2]} → ${parts[3]}")
         }
         summary.text = "파일 이름 변경·삭제 성공 기록 · 삭제 복구 기능은 아직 지원하지 않습니다."
     }
