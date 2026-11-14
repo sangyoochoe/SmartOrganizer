@@ -39,6 +39,7 @@ class WallpaperStudioActivity : Activity() {
         super.onCreate(savedInstanceState)
         loadMedia()
         buildUi()
+        loadAllDeviceMedia()
     }
 
     private fun loadMedia() {
@@ -70,7 +71,7 @@ class WallpaperStudioActivity : Activity() {
             textSize = 13f
         })
         val buttons = LinearLayout(this).apply { gravity = Gravity.CENTER }
-        buttons.addView(Button(this).apply { text = "전체 사진·동영상 불러오기"; setOnClickListener { loadAllDeviceMedia() } })
+        buttons.addView(Button(this).apply { text = "갤러리 전체 불러오기"; setOnClickListener { loadAllDeviceMedia() } })
         buttons.addView(Button(this).apply { text = "사진 추가"; setOnClickListener { pick("image/*", 7101) } })
         buttons.addView(Button(this).apply { text = "동영상 추가"; setOnClickListener { pick("video/*", 7102) } })
         buttons.addView(Button(this).apply { text = "GIF 추가"; setOnClickListener { pick("image/gif", 7103) } })
@@ -238,17 +239,38 @@ class WallpaperStudioActivity : Activity() {
 
     private fun renderList() {
         list.removeAllViews()
-        if (media.isEmpty()) list.addView(TextView(this).apply { text = "보관함이 비어 있습니다." })
-        media.forEach { (uri, video) ->
-            val row = Button(this).apply {
-                text = (if (video) "▶ 동영상 · " else "▧ 사진 · ") + (uri.lastPathSegment ?: "미디어")
-                setOnClickListener { selectedUri = uri; selectedIsVideo = video; showPreview() }
-            }
-            list.addView(row)
+        if (media.isEmpty()) {
+            list.addView(TextView(this).apply { text = "기기 갤러리에서 사진·동영상을 불러오면 여기에 표시됩니다." })
+            return
         }
+        val grid = GridLayout(this).apply { columnCount = 4; useDefaultMargins = true }
+        media.forEach { (uri, video) ->
+            val tile = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER
+                setPadding(dp(3), dp(3), dp(3), dp(3))
+                setOnClickListener {
+                    selectedUri = uri
+                    selectedIsVideo = video
+                    selectedBuiltinResId = 0
+                    showPreview()
+                }
+            }
+            val thumb = ImageView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(-1, dp(92))
+                scaleType = ImageView.ScaleType.FIT_CENTER
+                if (video) setImageResource(android.R.drawable.ic_media_play) else setImageURI(uri)
+            }
+            tile.addView(thumb)
+            tile.addView(TextView(this).apply { text = if (video) "▶ 동영상" else "사진"; textSize = 11f; gravity = Gravity.CENTER; maxLines = 1 })
+            grid.addView(tile, GridLayout.LayoutParams().apply {
+                width = 0
+                height = GridLayout.LayoutParams.WRAP_CONTENT
+                columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
+            })
+        }
+        list.addView(grid)
     }
-
-
 
     private fun addDailySchedule() {
         val uri = selectedUri
