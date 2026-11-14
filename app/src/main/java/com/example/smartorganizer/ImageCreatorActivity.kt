@@ -68,19 +68,20 @@ class ImageCreatorActivity : Activity() {
         }
         root.addView(steps)
 
+        val isExpanded = resources.configuration.screenWidthDp >= 600
         val arena = LinearLayout(this).apply {
-            orientation = if (resources.configuration.screenWidthDp >= 600) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+            orientation = if (isExpanded) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
         }
         val artColumn = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         preview = EffectPreview().apply {
             background = rounded(0xff0c1c30.toInt(), 20f, 0xff29465a.toInt())
         }
-        artColumn.addView(preview, LinearLayout.LayoutParams(-1, if (resources.configuration.screenWidthDp >= 600) -1 else dp(310), 1f))
+        artColumn.addView(preview, LinearLayout.LayoutParams(-1, dp(if (isExpanded) 420 else 260)))
         artColumn.addView(TextView(this).apply {
             text = "LIVE PREVIEW   ·   GALAXY Z FOLD7"
             textSize = 9f; setTextColor(muted); setPadding(dp(4), dp(10), 0, dp(8))
         })
-        arena.addView(artColumn, LinearLayout.LayoutParams(0, -1, if (resources.configuration.screenWidthDp >= 600) 1.08f else 1f))
+        arena.addView(artColumn, LinearLayout.LayoutParams(if (isExpanded) 0 else -1, -2, if (isExpanded) 1.08f else 0f))
 
         val controls = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -124,9 +125,9 @@ class ImageCreatorActivity : Activity() {
         controls.addView(save, LinearLayout.LayoutParams(-1, dp(52)))
         val apply = Button(this).apply { text = "배경화면으로 적용"; styleButton(this); setOnClickListener { applyWallpaper() } }
         controls.addView(apply, LinearLayout.LayoutParams(-1, dp(48)).apply { topMargin = dp(7) })
-        arena.addView(controls, LinearLayout.LayoutParams(0, -1, if (resources.configuration.screenWidthDp >= 600) .92f else 1f))
-        root.addView(arena, LinearLayout.LayoutParams(-1, 0, 1f))
-        setContentView(root)
+        arena.addView(controls, LinearLayout.LayoutParams(if (isExpanded) 0 else -1, -2, if (isExpanded) .92f else 0f))
+        root.addView(arena, LinearLayout.LayoutParams(-1, -2))
+        setContentView(ScrollView(this).apply { isFillViewport = true; addView(root) })
     }
 
     private fun pickImage() {
