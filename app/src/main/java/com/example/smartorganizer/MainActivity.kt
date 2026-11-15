@@ -123,13 +123,13 @@ class MainActivity : Activity() {
             text = "☾ 세일러문 Fold 테마 설정"
             setOnClickListener { startActivity(Intent(this@MainActivity, SailorMoonSetupActivity::class.java)) }
         }
-        val sailorMoonButton = Button(this).apply {
-            text = "☾ 세일러문 Fold 테마 설정"
-            setOnClickListener { startActivity(Intent(this@MainActivity, SailorMoonSetupActivity::class.java)) }
-        }
         launcherButton = Button(this).apply {
             text = "사진 기반 나만의 홈 화면 열기"
             setOnClickListener { startActivity(Intent(this@MainActivity, LauncherActivity::class.java)) }
+        }
+        val cyberDashboardButton = Button(this).apply {
+            text = "⚡ 사이버 포뮬러 대시보드"
+            setOnClickListener { startActivity(Intent(this@MainActivity, CyberDashboardActivity::class.java)) }
         }
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -147,7 +147,7 @@ class MainActivity : Activity() {
             addView(wallpaperButton)
             addView(launcherButton)
             addView(sailorMoonButton)
-            addView(sailorMoonButton)
+            addView(cyberDashboardButton)
         }
         val scroll = ScrollView(this)
         results = LinearLayout(this).apply {
