@@ -16,6 +16,9 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.max
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.objects.ObjectDetection
+import com.google.mlkit.vision.objects.defaults.ObjectDetectorOptions
 
 class DesktopStudioActivity : Activity() {
     private data class Tile(val id: Long, val type: String, var x: Float, var y: Float, var w: Int, var h: Int, var text: String = "", var pkg: String = "")
@@ -69,6 +72,7 @@ class DesktopStudioActivity : Activity() {
         bar.addView(heading,LinearLayout.LayoutParams(0,dp(44),1f))
         bar.addView(button("＋ 위젯"){ addMenu() })
         bar.addView(button("배경"){ pickWallpaper() })
+        bar.addView(button("AI 분석"){ pickAndAnalyze() })
         bar.addView(button("저장"){ save(); toast("배치 저장 완료") })
         canvas = FrameLayout(this).apply { setBackgroundColor(0xff17649a.toInt()); clipChildren=true }
         canvas.addOnLayoutChangeListener { _,l,t,r,b,_,_,_,_ ->
@@ -108,6 +112,41 @@ class DesktopStudioActivity : Activity() {
             .map{it.loadLabel(packageManager).toString() to it.activityInfo.packageName}.distinctBy{it.second}.sortedBy{it.first.lowercase()}
         AlertDialog.Builder(this).setTitle("앱 바로가기 선택").setItems(apps.map{it.first}.toTypedArray()){_,i->add("app",apps[i].first,apps[i].second)}.show()
     }
+    private fun pickAndAnalyze(){
+        startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply{
+            type="image/*";addCategory(Intent.CATEGORY_OPENABLE)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        },7302)
+    }
+    private fun analyzeImage(uri:Uri){
+        toast("사진의 객체와 위치를 분석하고 있습니다.")
+        val image=try{InputImage.fromFilePath(this,uri)}catch(e:Exception){toast("이미지를 열 수 없습니다.");return}
+        val options=ObjectDetectorOptions.Builder().setDetectorMode(ObjectDetectorOptions.SINGLE_IMAGE_MODE)
+            .enableMultipleObjects().enableClassification().build()
+        val detector=ObjectDetection.getClient(options)
+        detector.process(image).addOnSuccessListener{objects->
+            wallpaper=uri.toString()
+            val iw=image.width.coerceAtLeast(1);val ih=image.height.coerceAtLeast(1)
+            val found=objects.take(24).mapNotNull{obj->
+                val box=obj.boundingBox
+                val label=obj.labels.maxByOrNull{it.confidence}?.text ?: "감지 객체"
+                val x=(box.left.toFloat()/iw).coerceIn(0f,.92f)
+                val y=(box.top.toFloat()/ih).coerceIn(0f,.92f)
+                val w=(box.width().toFloat()/iw*canvas.width/resources.displayMetrics.density).toInt().coerceIn(90,260)
+                val h=(box.height().toFloat()/ih*canvas.height/resources.displayMetrics.density).toInt().coerceIn(46,160)
+                Tile(System.currentTimeMillis()+box.left+box.top,"detected",x,y,w,h,label,"")
+            }
+            tiles.removeAll{it.type=="detected"}
+            tiles.addAll(found)
+            prefs.edit().putString("wall_$key",wallpaper).apply()
+            save();render()
+            toast("분석 완료: 객체 ${found.size}개를 편집 가능한 위치 태그로 배치했습니다.")
+            detector.close()
+        }.addOnFailureListener{error->
+            detector.close()
+            toast("사진 분석 실패: ${error.localizedMessage}")
+        }
+    }
     private fun pickWallpaper(){
         startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply{type="image/*";addCategory(Intent.CATEGORY_OPENABLE)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)},7301)
@@ -115,9 +154,10 @@ class DesktopStudioActivity : Activity() {
     @Deprecated("Legacy result API retained")
     override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){
         super.onActivityResult(requestCode,resultCode,data)
-        if(requestCode==7301 && resultCode==RESULT_OK){
+        if((requestCode==7301 || requestCode==7302) && resultCode==RESULT_OK){
             val uri=data?.data?:return
             try{contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)}catch(_:Exception){}
+            if(requestCode==7302){ analyzeImage(uri); return }
             wallpaper=uri.toString();prefs.edit().putString("wall_$key",wallpaper).apply();render()
         }
     }
@@ -158,6 +198,7 @@ class DesktopStudioActivity : Activity() {
                         override fun afterTextChanged(s:Editable?){}
                     })},LinearLayout.LayoutParams(-1,-1))
                 "app"->panel.addView(TextView(this).apply{text="▣\n"+tile.text;textSize=14f;gravity=Gravity.CENTER;setTextColor(Color.WHITE);typeface=Typeface.DEFAULT_BOLD},LinearLayout.LayoutParams(-1,-1))
+                "detected"->panel.addView(TextView(this).apply{text="⌖  "+tile.text;textSize=12f;gravity=Gravity.CENTER;setTextColor(0xffa6f5ff.toInt());typeface=Typeface.DEFAULT_BOLD},LinearLayout.LayoutParams(-1,-1))
             }
             panel.setOnClickListener{if(tile.type=="app")packageManager.getLaunchIntentForPackage(tile.pkg)?.let{startActivity(it)}}
             panel.setOnLongClickListener{tileMenu(tile);true}
