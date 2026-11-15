@@ -52,9 +52,9 @@ class CyberDashboardActivity : Activity() {
         mode=TextView(this).apply { text="NORMAL DRIVE"; textSize=18f; gravity=Gravity.CENTER; setTextColor(0xff69dfff.toInt()); setPadding(0,dp(12),0,dp(8)) }
         root.addView(mode)
         val controls=LinearLayout(this).apply { orientation=LinearLayout.HORIZONTAL }
-        controls.addView(Button(this).apply { text="◀ NAV"; setOnClickListener { chooseApp("left") } },LinearLayout.LayoutParams(0,dp(56),1f))
+        controls.addView(Button(this).apply { text="◀ NAV"; setOnClickListener { runOrChooseApp("left") } },LinearLayout.LayoutParams(0,dp(56),1f))
         controls.addView(Button(this).apply { text="ZERO BOOST"; setOnClickListener { boost=!boost; updateMode() } },LinearLayout.LayoutParams(0,dp(56),1f))
-        controls.addView(Button(this).apply { text="APP ▶"; setOnClickListener { chooseApp("right") } },LinearLayout.LayoutParams(0,dp(56),1f))
+        controls.addView(Button(this).apply { text="APP ▶"; setOnClickListener { runOrChooseApp("right") } },LinearLayout.LayoutParams(0,dp(56),1f))
         root.addView(controls)
         root.addView(TextView(this).apply { text="화면 터치: 부스터 모드 전환 · 좌/우 버튼: 실행할 앱 지정"; textSize=11f; gravity=Gravity.CENTER; setTextColor(0xff7893a7.toInt()); setPadding(0,dp(10),0,0) })
         panel.setOnClickListener { boost=!boost; updateMode() }
@@ -67,6 +67,16 @@ class CyberDashboardActivity : Activity() {
         panel.boost=boost; panel.invalidate()
     }
 
+    private fun runOrChooseApp(slot:String) {
+        val pkg=getSharedPreferences("cyber_dashboard",MODE_PRIVATE).getString(slot,null)
+        if(pkg.isNullOrBlank()) { chooseApp(slot); return }
+        val launch=packageManager.getLaunchIntentForPackage(pkg)
+        if(launch!=null) startActivity(launch) else {
+            getSharedPreferences("cyber_dashboard",MODE_PRIVATE).edit().remove(slot).apply()
+            chooseApp(slot)
+        }
+    }
+
     private fun chooseApp(slot:String) {
         val apps=packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),0)
             .map { it.loadLabel(packageManager).toString() to it.activityInfo.packageName }.distinctBy { it.second }.sortedBy { it.first }
@@ -75,7 +85,7 @@ class CyberDashboardActivity : Activity() {
             .setItems(labels) { _,which ->
                 val pkg=apps[which].second
                 getSharedPreferences("cyber_dashboard",MODE_PRIVATE).edit().putString(slot,pkg).apply()
-                packageManager.getLaunchIntentForPackage(pkg)?.let { startActivity(it) }
+                Toast.makeText(this,"버튼에 앱을 지정했습니다. 다시 눌러 실행하세요.",Toast.LENGTH_SHORT).show()
             }.setNegativeButton("취소",null).show()
     }
 
