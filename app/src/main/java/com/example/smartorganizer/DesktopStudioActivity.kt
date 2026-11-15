@@ -235,9 +235,25 @@ class DesktopStudioActivity : Activity() {
     private fun render(){
         heading.text="DESKTOP STUDIO  /  $label";canvas.removeAllViews()
         var applied=false
-        wallpaper?.let{uri->try{contentResolver.openInputStream(Uri.parse(uri))?.use{stream->
-            val bmp=BitmapFactory.decodeStream(stream);if(bmp!=null){canvas.background=android.graphics.drawable.BitmapDrawable(resources,bmp);applied=true}
-        }}catch(_:Exception){}}
+        wallpaper?.let{raw->
+            try{
+                val uri=Uri.parse(raw)
+                val bounds=BitmapFactory.Options().apply{inJustDecodeBounds=true}
+                contentResolver.openInputStream(uri)?.use{BitmapFactory.decodeStream(it,null,bounds)}
+                if(bounds.outWidth>0 && bounds.outHeight>0){
+                    val targetW=canvas.width.coerceAtLeast(resources.displayMetrics.widthPixels)
+                    val targetH=canvas.height.coerceAtLeast(resources.displayMetrics.heightPixels)
+                    var sample=1
+                    while(bounds.outWidth/sample>targetW*2 || bounds.outHeight/sample>targetH*2)sample*=2
+                    val options=BitmapFactory.Options().apply{inSampleSize=sample;inPreferredConfig=android.graphics.Bitmap.Config.RGB_565}
+                    val bitmap=contentResolver.openInputStream(uri)?.use{BitmapFactory.decodeStream(it,null,options)}
+                    if(bitmap!=null){
+                        canvas.background=android.graphics.drawable.BitmapDrawable(resources,bitmap).apply{gravity=Gravity.FILL}
+                        applied=true
+                    }
+                }
+            }catch(_:Exception){toast("배경 이미지를 불러오지 못했습니다. 파일 권한 또는 백업 기기 경로를 확인하세요.")}
+        }
         if(!applied)canvas.setBackgroundColor(0xff17649a.toInt())
         renderTiles()
     }
