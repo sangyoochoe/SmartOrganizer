@@ -33,6 +33,7 @@
         <activity android:name=".ImageCreatorActivity" android:exported="false" />
         <activity android:name=".WallpaperStudioActivity" android:exported="false" />
         <activity android:name=".StarCandyWizardActivity" android:exported="false" />
+        <activity android:name=".QuickPanelIconStudioActivity" android:exported="false" />
         <activity android:name=".ChargingPreviewActivity" android:exported="false" />
         <receiver android:name=".ChargingReceiver" android:enabled="true" android:exported="false">
             <intent-filter><action android:name="android.intent.action.ACTION_POWER_CONNECTED" /></intent-filter>
