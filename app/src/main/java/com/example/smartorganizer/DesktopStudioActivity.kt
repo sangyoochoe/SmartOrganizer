@@ -59,7 +59,8 @@ class DesktopStudioActivity : Activity() {
     override fun onResume() {
         super.onResume()
         monitor.start()
-        registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        if(android.os.Build.VERSION.SDK_INT>=33) registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), Context.RECEIVER_NOT_EXPORTED)
+        else @Suppress("DEPRECATION") registerReceiver(batteryReceiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
     }
     override fun onPause() {
         try { unregisterReceiver(batteryReceiver) } catch (_: Exception) {}
