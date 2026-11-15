@@ -84,6 +84,10 @@ class WallpaperStudioActivity : Activity() {
         buttons.addView(Button(this).apply { text = "내부 화면용 저장"; setOnClickListener { saveFoldWallpaper("expanded_wallpaper_uri") } })
         outer.addView(buttons)
         outer.addView(Button(this).apply {
+            text = "✦ 별사탕 스타일 테마 적용 마법사"
+            setOnClickListener { startActivity(Intent(this@WallpaperStudioActivity, StarCandyWizardActivity::class.java)) }
+        })
+        outer.addView(Button(this).apply {
             text = "✨ AI 배경화면 제작 스튜디오"
             setOnClickListener { startActivity(Intent(this@WallpaperStudioActivity, ImageCreatorActivity::class.java)) }
         })
