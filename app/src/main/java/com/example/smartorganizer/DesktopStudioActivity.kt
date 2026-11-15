@@ -163,13 +163,19 @@ class DesktopStudioActivity : Activity() {
             panel.setOnLongClickListener{tileMenu(tile);true}
             val lp=FrameLayout.LayoutParams(dp(tile.w),dp(tile.h)).apply{leftMargin=(tile.x*canvas.width).toInt().coerceIn(0,max(0,canvas.width-dp(tile.w)));topMargin=(tile.y*canvas.height).toInt().coerceIn(0,max(0,canvas.height-dp(tile.h)))}
             canvas.addView(panel,lp)
-            var sx=0f;var sy=0f;var left=0;var top=0
+            var sx=0f;var sy=0f;var left=0;var top=0;var moved=false;var longPressed=false
+            val gestures=GestureDetector(this,object:GestureDetector.SimpleOnGestureListener(){
+                override fun onDown(e:MotionEvent):Boolean=true
+                override fun onLongPress(e:MotionEvent){longPressed=true;tileMenu(tile)}
+            })
             panel.setOnTouchListener{v,e->
                 if(tile.type=="memo" && v.findFocus() is EditText)return@setOnTouchListener false
+                gestures.onTouchEvent(e)
                 when(e.action){
-                    MotionEvent.ACTION_DOWN->{sx=e.rawX;sy=e.rawY;val p=v.layoutParams as FrameLayout.LayoutParams;left=p.leftMargin;top=p.topMargin;true}
-                    MotionEvent.ACTION_MOVE->{val p=v.layoutParams as FrameLayout.LayoutParams;p.leftMargin=(left+e.rawX-sx).toInt().coerceIn(0,max(0,canvas.width-v.width));p.topMargin=(top+e.rawY-sy).toInt().coerceIn(0,max(0,canvas.height-v.height));v.layoutParams=p;tile.x=p.leftMargin.toFloat()/canvas.width;tile.y=p.topMargin.toFloat()/canvas.height;true}
-                    MotionEvent.ACTION_UP->{save();true}
+                    MotionEvent.ACTION_DOWN->{sx=e.rawX;sy=e.rawY;moved=false;longPressed=false;val p=v.layoutParams as FrameLayout.LayoutParams;left=p.leftMargin;top=p.topMargin;true}
+                    MotionEvent.ACTION_MOVE->{if(kotlin.math.abs(e.rawX-sx)>dp(5)||kotlin.math.abs(e.rawY-sy)>dp(5))moved=true
+                        val p=v.layoutParams as FrameLayout.LayoutParams;p.leftMargin=(left+e.rawX-sx).toInt().coerceIn(0,max(0,canvas.width-v.width));p.topMargin=(top+e.rawY-sy).toInt().coerceIn(0,max(0,canvas.height-v.height));v.layoutParams=p;tile.x=p.leftMargin.toFloat()/canvas.width;tile.y=p.topMargin.toFloat()/canvas.height;true}
+                    MotionEvent.ACTION_UP->{save();if(!moved&&!longPressed&&tile.type=="app")packageManager.getLaunchIntentForPackage(tile.pkg)?.let{startActivity(it)};true}
                     else->true
                 }
             }
