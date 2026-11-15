@@ -44,6 +44,19 @@ class WallpaperStudioActivity : Activity() {
         loadAllDeviceMedia()
     }
 
+    private fun chooseLiveWallpaperFps() {
+        val options = arrayOf("15 FPS · 최대 절전", "24 FPS · 균형", "30 FPS · 부드러움")
+        val current = prefs.getInt("live_wallpaper_fps", 24)
+        val selected = when (current) { 15 -> 0; 30 -> 2; else -> 1 }
+        AlertDialog.Builder(this).setTitle("라이브 배경 프레임 제한")
+            .setSingleChoiceItems(options, selected) { dialog, which ->
+                val fps = when (which) { 0 -> 15; 2 -> 30; else -> 24 }
+                prefs.edit().putInt("live_wallpaper_fps", fps).apply()
+                Toast.makeText(this, "GIF 라이브 배경을 최대 ${fps}FPS로 제한합니다.", Toast.LENGTH_LONG).show()
+                dialog.dismiss()
+            }.setNegativeButton("취소", null).show()
+    }
+
     private fun loadMedia() {
         val saved = prefs.getString("library", "") ?: ""
         saved.split("\n").filter { it.isNotBlank() }.forEach { row ->
@@ -84,9 +97,10 @@ class WallpaperStudioActivity : Activity() {
         buttons.addView(Button(this).apply { text = "내부 화면용 저장"; setOnClickListener { saveFoldWallpaper("expanded_wallpaper_uri") } })
         outer.addView(buttons)
         outer.addView(Button(this).apply {
-            text = "☾ 세일러문 테마 설정"
-            setOnClickListener { startActivity(Intent(this@WallpaperStudioActivity, SailorMoonSetupActivity::class.java)) }
+            text = "라이브 배경 FPS / 품질 절전 설정"
+            setOnClickListener { chooseLiveWallpaperFps() }
         })
+
         outer.addView(Button(this).apply {
             text = "☾ 세일러문 테마 설정"
             setOnClickListener { startActivity(Intent(this@WallpaperStudioActivity, SailorMoonSetupActivity::class.java)) }
