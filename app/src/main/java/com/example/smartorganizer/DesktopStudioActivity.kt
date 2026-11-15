@@ -149,10 +149,15 @@ class DesktopStudioActivity : Activity() {
     }
     private fun readLayout(uri:Uri){
         try{
-            val raw=contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use{it.readText()}?:throw IllegalStateException("파일을 읽을 수 없습니다.")
+            val raw=contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use{reader->
+                val text=reader.readText()
+                require(text.length<=2_000_000){"레이아웃 파일이 너무 큽니다."}
+                text
+            }?:throw IllegalStateException("파일을 읽을 수 없습니다.")
             val root=JSONObject(raw)
             require(root.optString("format")=="SMART_ORGANIZER_DESKTOP_V1"){"지원하지 않는 레이아웃 파일입니다."}
             val restored=mutableListOf<Tile>();val rows=root.getJSONArray("tiles")
+            require(rows.length()<=100){"위젯은 최대 100개까지 복원할 수 있습니다."}
             for(i in 0 until rows.length()){
                 val o=rows.getJSONObject(i);val type=o.getString("type")
                 require(type in setOf("clock","date","battery","memo","app","detected")){"알 수 없는 위젯 형식"}
@@ -160,9 +165,16 @@ class DesktopStudioActivity : Activity() {
                     o.optDouble("x",.05).toFloat().coerceIn(0f,1f),o.optDouble("y",.05).toFloat().coerceIn(0f,1f),
                     o.optInt("w",150).coerceIn(60,500),o.optInt("h",70).coerceIn(36,400),o.optString("text"),o.optString("pkg")))
             }
+            val importedWallpaper=root.optString("wallpaper").takeIf{it.isNotBlank()&&it!="null"}
+            val wallpaperAvailable=try{
+                importedWallpaper?.let{contentResolver.openInputStream(Uri.parse(it))?.use{stream->stream.read()>=0}}?:false
+            }catch(_:Exception){false}
             tiles.clear();tiles.addAll(restored)
-            wallpaper=root.optString("wallpaper").takeIf{it.isNotBlank()&&it!="null"}
-            save();render();toast("레이아웃 ${tiles.size}개 요소를 가져왔습니다.")
+            if(wallpaperAvailable)wallpaper=importedWallpaper
+            save();render()
+            toast(if(importedWallpaper!=null&&!wallpaperAvailable)
+                "위젯 ${tiles.size}개 복원 완료. 배경은 원본 기기 전용 경로라 다시 선택해야 합니다."
+                else "레이아웃 ${tiles.size}개 요소를 가져왔습니다.")
         }catch(e:Exception){toast("가져오기 실패: ${e.localizedMessage}")}
     }
     private fun pickApp(){
