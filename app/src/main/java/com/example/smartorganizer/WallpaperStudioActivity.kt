@@ -88,6 +88,10 @@ class WallpaperStudioActivity : Activity() {
             setOnClickListener { startActivity(Intent(this@WallpaperStudioActivity, SailorMoonSetupActivity::class.java)) }
         })
         outer.addView(Button(this).apply {
+            text = "☾ 세일러문 테마 설정"
+            setOnClickListener { startActivity(Intent(this@WallpaperStudioActivity, SailorMoonSetupActivity::class.java)) }
+        })
+        outer.addView(Button(this).apply {
             text = "퀵패널 아이콘 직접 만들기"
             setOnClickListener { startActivity(Intent(this@WallpaperStudioActivity, QuickPanelIconStudioActivity::class.java)) }
         })
