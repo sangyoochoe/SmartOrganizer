@@ -15,6 +15,8 @@ import android.widget.*
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlin.math.max
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.objects.ObjectDetection
@@ -95,8 +97,8 @@ class DesktopStudioActivity : Activity() {
         }.show()
     }
     private fun startMenu(){
-        AlertDialog.Builder(this).setTitle("Smart Desktop").setItems(arrayOf("위젯 추가","앱 바로가기 추가","배경 변경","화면 초기화")){_,i->
-            when(i){0->addMenu();1->pickApp();2->pickWallpaper();3->
+        AlertDialog.Builder(this).setTitle("Smart Desktop").setItems(arrayOf("위젯 추가","앱 바로가기 추가","배경 변경","프리셋 적용","레이아웃 내보내기","레이아웃 가져오기","화면 초기화")){_,i->
+            when(i){0->addMenu();1->pickApp();2->pickWallpaper();3->presetMenu();4->exportLayout();5->importLayout();6->
                 AlertDialog.Builder(this).setMessage("현재 화면의 요소를 모두 삭제할까요?").setNegativeButton("취소",null)
                     .setPositiveButton("삭제"){_,_->tiles.clear();save();renderTiles()}.show()
             }
@@ -106,6 +108,62 @@ class DesktopStudioActivity : Activity() {
         val size=when(type){"clock"->190 to 76;"memo"->210 to 145;"date"->170 to 48;"battery"->150 to 52;else->150 to 75}
         tiles.add(Tile(System.currentTimeMillis(),type,.08f+(tiles.size%4)*.04f,.08f+(tiles.size%5)*.09f,size.first,size.second,text,pkg))
         save();renderTiles()
+    }
+    private fun presetMenu(){
+        val names=arrayOf("Windows 데스크톱","Cyber Formula HUD","미니멀 시계")
+        AlertDialog.Builder(this).setTitle("현재 화면 프리셋").setItems(names){_,i->
+            tiles.clear()
+            when(i){
+                0->{tiles.add(Tile(1,"clock",.06f,.06f,190,76));tiles.add(Tile(2,"date",.06f,.22f,190,48));tiles.add(Tile(3,"memo",.62f,.08f,220,150,"오늘 할 일을 입력하세요"))}
+                1->{tiles.add(Tile(11,"clock",.34f,.08f,230,90));tiles.add(Tile(12,"date",.35f,.25f,220,48));tiles.add(Tile(13,"battery",.72f,.06f,160,55));tiles.add(Tile(14,"memo",.06f,.62f,230,120,"ZERO BOOST SYSTEM"))}
+                2->{tiles.add(Tile(21,"clock",.25f,.25f,240,100));tiles.add(Tile(22,"date",.29f,.43f,200,48))}
+            }
+            save();renderTiles();toast("${names[i]} 프리셋을 적용했습니다.")
+        }.show()
+    }
+    private fun exportLayout(){
+        save()
+        startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply{
+            addCategory(Intent.CATEGORY_OPENABLE);type="application/json"
+            putExtra(Intent.EXTRA_TITLE,"smart-desktop-$key.sod.json")
+        },7303)
+    }
+    private fun importLayout(){
+        startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply{
+            addCategory(Intent.CATEGORY_OPENABLE);type="application/json"
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        },7304)
+    }
+    private fun layoutJson():String{
+        val root=JSONObject().put("format","SMART_ORGANIZER_DESKTOP_V1").put("posture",key).put("wallpaper",wallpaper)
+        val rows=JSONArray()
+        tiles.forEach{t->rows.put(JSONObject().put("id",t.id).put("type",t.type).put("x",t.x).put("y",t.y).put("w",t.w).put("h",t.h).put("text",t.text).put("pkg",t.pkg))}
+        return root.put("tiles",rows).toString(2)
+    }
+    private fun writeLayout(uri:Uri){
+        try{
+            val stream=contentResolver.openOutputStream(uri)?:throw IllegalStateException("파일을 열 수 없습니다.")
+            stream.bufferedWriter(Charsets.UTF_8).use{it.write(layoutJson())}
+            toast("레이아웃 파일을 내보냈습니다.")
+        }catch(e:Exception){toast("내보내기 실패: ${e.localizedMessage}")}
+    }
+    private fun readLayout(uri:Uri){
+        try{
+            val raw=contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use{it.readText()}?:throw IllegalStateException("파일을 읽을 수 없습니다.")
+            val root=JSONObject(raw)
+            require(root.optString("format")=="SMART_ORGANIZER_DESKTOP_V1"){"지원하지 않는 레이아웃 파일입니다."}
+            val restored=mutableListOf<Tile>();val rows=root.getJSONArray("tiles")
+            for(i in 0 until rows.length()){
+                val o=rows.getJSONObject(i);val type=o.getString("type")
+                require(type in setOf("clock","date","battery","memo","app","detected")){"알 수 없는 위젯 형식"}
+                restored.add(Tile(o.optLong("id",System.currentTimeMillis()+i),type,
+                    o.optDouble("x",.05).toFloat().coerceIn(0f,1f),o.optDouble("y",.05).toFloat().coerceIn(0f,1f),
+                    o.optInt("w",150).coerceIn(60,500),o.optInt("h",70).coerceIn(36,400),o.optString("text"),o.optString("pkg")))
+            }
+            tiles.clear();tiles.addAll(restored)
+            wallpaper=root.optString("wallpaper").takeIf{it.isNotBlank()&&it!="null"}
+            save();render();toast("레이아웃 ${tiles.size}개 요소를 가져왔습니다.")
+        }catch(e:Exception){toast("가져오기 실패: ${e.localizedMessage}")}
     }
     private fun pickApp(){
         val apps=packageManager.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER),0)
@@ -154,6 +212,8 @@ class DesktopStudioActivity : Activity() {
     @Deprecated("Legacy result API retained")
     override fun onActivityResult(requestCode:Int,resultCode:Int,data:Intent?){
         super.onActivityResult(requestCode,resultCode,data)
+        if(requestCode==7303 && resultCode==RESULT_OK){ data?.data?.let{writeLayout(it)}; return }
+        if(requestCode==7304 && resultCode==RESULT_OK){ data?.data?.let{readLayout(it)}; return }
         if((requestCode==7301 || requestCode==7302) && resultCode==RESULT_OK){
             val uri=data?.data?:return
             try{contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)}catch(_:Exception){}
