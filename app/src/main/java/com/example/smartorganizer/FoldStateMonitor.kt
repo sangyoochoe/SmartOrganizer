@@ -45,7 +45,7 @@ class FoldStateMonitor(
             widthDp >= 600 -> Posture.OPEN_OR_FLAT
             else -> Posture.COVER_OR_COMPACT
         }
-        onChanged(State(posture, feature?.isSeparating == true, feature?.bounds, widthDp, heightDp))
+        activity.runOnUiThread { onChanged(State(posture, feature?.isSeparating == true, feature?.bounds, widthDp, heightDp)) }
     }
 
     fun start() {
