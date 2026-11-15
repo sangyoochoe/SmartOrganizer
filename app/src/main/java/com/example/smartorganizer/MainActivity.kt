@@ -119,6 +119,10 @@ class MainActivity : Activity() {
             text = "월페이퍼 스튜디오 (사진·동영상)"
             setOnClickListener { startActivity(Intent(this@MainActivity, WallpaperStudioActivity::class.java)) }
         }
+        val sailorMoonButton = Button(this).apply {
+            text = "☾ 세일러문 Fold 테마 설정"
+            setOnClickListener { startActivity(Intent(this@MainActivity, SailorMoonSetupActivity::class.java)) }
+        }
         launcherButton = Button(this).apply {
             text = "사진 기반 나만의 홈 화면 열기"
             setOnClickListener { startActivity(Intent(this@MainActivity, LauncherActivity::class.java)) }
@@ -138,6 +142,7 @@ class MainActivity : Activity() {
             addView(appsButton)
             addView(wallpaperButton)
             addView(launcherButton)
+            addView(sailorMoonButton)
         }
         val scroll = ScrollView(this)
         results = LinearLayout(this).apply {
