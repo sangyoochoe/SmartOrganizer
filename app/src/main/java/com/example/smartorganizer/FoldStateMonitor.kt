@@ -9,7 +9,7 @@ import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.WindowLayoutInfo
 import java.util.concurrent.Executor
 import java.util.concurrent.Executors
-import java.util.function.Consumer
+import androidx.core.util.Consumer
 
 /**
  * Reports the current app-window posture using AndroidX WindowManager.
