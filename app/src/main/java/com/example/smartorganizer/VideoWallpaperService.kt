@@ -28,7 +28,9 @@ class VideoWallpaperService : WallpaperService() {
                 if (!visible || gif == null) return
                 try {
                     val decoder = gif ?: return
-                    val delay = decoder.advance()
+                    val frameDelay = decoder.advance()
+                    val fpsLimit = getSharedPreferences("wallpaper_studio", MODE_PRIVATE).getInt("live_wallpaper_fps", 24).coerceIn(15, 30)
+                    val delay = maxOf(frameDelay, 1000 / fpsLimit)
                     val bitmap = gifBitmap ?: Bitmap.createBitmap(decoder.width, decoder.height, Bitmap.Config.ARGB_8888).also { gifBitmap = it }
                     bitmap.setPixels(decoder.pixels, 0, decoder.width, 0, 0, decoder.width, decoder.height)
                     drawBitmap(bitmap)
