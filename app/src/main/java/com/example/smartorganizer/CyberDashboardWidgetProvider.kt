@@ -20,9 +20,12 @@ class CyberDashboardWidgetProvider : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == ACTION_TOGGLE_BOOST || intent.action == Intent.ACTION_DATE_CHANGED ||
-            intent.action == Intent.ACTION_TIME_CHANGED || intent.action == Intent.ACTION_TIMEZONE_CHANGED ||
-            intent.action == Intent.ACTION_BATTERY_CHANGED) {
+        if (intent.action == ACTION_TOGGLE_BOOST) {
+            val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            prefs.edit().putBoolean(KEY_BOOST, !prefs.getBoolean(KEY_BOOST, false)).apply()
+            updateAll(context)
+        } else if (intent.action == Intent.ACTION_DATE_CHANGED ||
+            intent.action == Intent.ACTION_TIME_CHANGED || intent.action == Intent.ACTION_TIMEZONE_CHANGED) {
             updateAll(context)
         }
     }
