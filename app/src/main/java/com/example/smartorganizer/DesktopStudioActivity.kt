@@ -66,6 +66,14 @@ class DesktopStudioActivity : Activity() {
         save(); monitor.stop(); super.onPause()
     }
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+    private fun clampTile(tile:Tile){
+        val maxX=(canvas.width-dp(tile.w)).coerceAtLeast(0)
+        val maxY=(canvas.height-dp(tile.h)).coerceAtLeast(0)
+        val px=(tile.x*canvas.width).toInt().coerceIn(0,maxX)
+        val py=(tile.y*canvas.height).toInt().coerceIn(0,maxY)
+        tile.x=if(canvas.width>0)px.toFloat()/canvas.width else 0f
+        tile.y=if(canvas.height>0)py.toFloat()/canvas.height else 0f
+    }
 
     private fun build() {
         val root = LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; setBackgroundColor(0xff0a1523.toInt()) }
@@ -273,6 +281,8 @@ class DesktopStudioActivity : Activity() {
         if(!::canvas.isInitialized || canvas.width==0 || canvas.height==0)return
         canvas.removeAllViews()
         tiles.forEach{tile->
+            tile.w=tile.w.coerceIn(60,500);tile.h=tile.h.coerceIn(36,400)
+            clampTile(tile)
             val panel=LinearLayout(this).apply{orientation=LinearLayout.VERTICAL;gravity=Gravity.CENTER;setPadding(dp(6),dp(4),dp(6),dp(4))
                 background=android.graphics.drawable.GradientDrawable().apply{setColor(0xd91a2b3d.toInt());setStroke(dp(1),0xff68dfff.toInt());cornerRadius=dp(8).toFloat()}}
             when(tile.type){
@@ -313,13 +323,13 @@ class DesktopStudioActivity : Activity() {
     private fun tileMenu(tile:Tile){
         AlertDialog.Builder(this).setTitle("요소 설정").setItems(arrayOf("크게","작게","내용 수정","삭제")){_,i->
             when(i){
-                0->{tile.w=(tile.w+30).coerceAtMost(330);tile.h=(tile.h+20).coerceAtMost(280)}
-                1->{tile.w=(tile.w-25).coerceAtLeast(90);tile.h=(tile.h-18).coerceAtLeast(42)}
+                0->{tile.w=(tile.w+30).coerceAtMost(500);tile.h=(tile.h+20).coerceAtMost(400)}
+                1->{tile.w=(tile.w-25).coerceAtLeast(60);tile.h=(tile.h-18).coerceAtLeast(36)}
                 2->{val edit=EditText(this).apply{setText(tile.text)}
                     AlertDialog.Builder(this).setTitle("텍스트 편집").setView(edit).setNegativeButton("취소",null)
                         .setPositiveButton("저장"){_,_->tile.text=edit.text.toString();save();renderTiles()}.show();return@setItems}
                 3->tiles.remove(tile)
-            };save();renderTiles()
+            };clampTile(tile);save();renderTiles()
         }.show()
     }
     private fun batteryText():String{
