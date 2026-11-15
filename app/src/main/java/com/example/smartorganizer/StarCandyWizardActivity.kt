@@ -22,6 +22,7 @@ class StarCandyWizardActivity : Activity() {
     private var theme = "드래곤볼"
     private var screen = "내부 화면"
     private var photo: Uri? = null
+    private var target = WallpaperManager.FLAG_SYSTEM
     private var pendingZip: java.io.File? = null
     private lateinit var page: LinearLayout
     private val prefs by lazy { getSharedPreferences("star_candy_theme", MODE_PRIVATE) }
@@ -88,6 +89,8 @@ class StarCandyWizardActivity : Activity() {
         heading("03 / MAKE IT YOURS","어디에 적용할까요?","원하는 화면에 적용하거나 테마 자료를 보관하세요.")
         option("내부 화면","넓게 펼쳐지는 잠금화면과 홈화면",screen=="내부 화면") { screen="내부 화면"; render() }
         option("외부 화면","접었을 때 만나는 나만의 작은 화면",screen=="외부 화면") { screen="외부 화면"; render() }
+        option("잠금화면","화면을 켤 때 처음 만나는 장면",target==WallpaperManager.FLAG_LOCK) { target=WallpaperManager.FLAG_LOCK; render() }
+        option("홈화면","매일 쓰는 화면에 배경 적용",target==WallpaperManager.FLAG_SYSTEM) { target=WallpaperManager.FLAG_SYSTEM; render() }
         option("충전 배경화면","충전 연결 시 사용할 영상·이미지",false) { startActivity(Intent(this,WallpaperStudioActivity::class.java)) }
         option("아이콘","테마 아이콘을 커스텀 런처에 배치",false) { startActivity(Intent(this,LauncherActivity::class.java)) }
         option("퀵패널 자료 ZIP","선택 사진 ZIP 내보내기 · 삼성 퀵패널 자동 변경은 지원하지 않음",false) { exportZip() }
@@ -119,9 +122,9 @@ class StarCandyWizardActivity : Activity() {
         try {
             contentResolver.openInputStream(uri).use { input ->
                 if(input==null) error("사진을 열 수 없습니다.")
-                WallpaperManager.getInstance(this).setStream(input,null,true,WallpaperManager.FLAG_SYSTEM)
+                WallpaperManager.getInstance(this).setStream(input,null,true,target)
             }
-            prefs.edit().putString(if(screen=="외부 화면") "cover_photo" else "inner_photo",uri.toString()).apply()
+            prefs.edit().putString(if(screen=="외부 화면") "cover_photo" else "inner_photo",uri.toString()).putString("last_apply_target",if(target==WallpaperManager.FLAG_LOCK) "lock" else "home").apply()
             Toast.makeText(this,"배경 적용 요청을 보냈습니다. 기기에서 확인하세요.",Toast.LENGTH_LONG).show()
         } catch(e:Exception) { Toast.makeText(this,"적용 실패: "+(e.localizedMessage ?: ""),Toast.LENGTH_LONG).show() }
     }
