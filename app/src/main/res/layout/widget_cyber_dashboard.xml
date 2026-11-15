@@ -32,7 +32,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:textColor="#91AF C4"
+        android:textColor="#91AFC4"
         android:textSize="11sp" />
 
     <TextView
@@ -69,8 +69,7 @@
             android:layout_height="match_parent"
             android:layout_weight="2"
             android:gravity="center"
-            android:text="SYSTEM
-TAP TO OPEN"
+            android:text="SYSTEM&#10;TAP TO OPEN"
             android:textColor="#FFFFFF"
             android:textSize="13sp"
             android:textStyle="bold"
