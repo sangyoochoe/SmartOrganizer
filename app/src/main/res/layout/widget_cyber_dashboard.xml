@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="14dp"
+    android:background="#E6081422">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="ASURADA  /  CYBER FORMULA"
+        android:textColor="#69DFFF"
+        android:textStyle="bold"
+        android:textSize="12sp"
+        android:gravity="center" />
+
+    <Chronometer
+        android:id="@+id/widget_clock"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:textColor="#FFFFFF"
+        android:textSize="32sp"
+        android:fontFamily="monospace"
+        android:format="%s"
+        android:paddingTop="5dp" />
+
+    <TextView
+        android:id="@+id/widget_date"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:textColor="#91AF C4"
+        android:textSize="11sp" />
+
+    <TextView
+        android:id="@+id/widget_battery"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="BATTERY  --"
+        android:textColor="#69DFFF"
+        android:textSize="12sp"
+        android:padding="5dp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_left"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="◀ NAV"
+            android:textColor="#69DFFF"
+            android:textStyle="bold"
+            android:background="#203B6078" />
+
+        <TextView
+            android:id="@+id/widget_center"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="2"
+            android:gravity="center"
+            android:text="SYSTEM
+TAP TO OPEN"
+            android:textColor="#FFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:background="#18345A70" />
+
+        <TextView
+            android:id="@+id/widget_right"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="APP ▶"
+            android:textColor="#69DFFF"
+            android:textStyle="bold"
+            android:background="#203B6078" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/widget_mode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="NORMAL DRIVE"
+        android:textColor="#69DFFF"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:paddingTop="7dp"
+        android:paddingBottom="2dp" />
+</LinearLayout>
