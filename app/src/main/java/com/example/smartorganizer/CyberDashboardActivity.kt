@@ -62,9 +62,11 @@ class CyberDashboardActivity : Activity() {
     }
 
     private fun updateMode() {
+        getSharedPreferences("cyber_dashboard", MODE_PRIVATE).edit().putBoolean("widget_boost", boost).apply()
         mode.text=if(boost) "ZERO NOISE  /  BOOSTER ACTIVE" else "NORMAL DRIVE"
         mode.setTextColor(if(boost) 0xffffb45c.toInt() else 0xff69dfff.toInt())
         panel.boost=boost; panel.invalidate()
+        CyberDashboardWidgetProvider.updateAll(this)
     }
 
     private fun runOrChooseApp(slot:String) {
@@ -85,7 +87,8 @@ class CyberDashboardActivity : Activity() {
             .setItems(labels) { _,which ->
                 val pkg=apps[which].second
                 getSharedPreferences("cyber_dashboard",MODE_PRIVATE).edit().putString(slot,pkg).apply()
-                Toast.makeText(this,"버튼에 앱을 지정했습니다. 다시 눌러 실행하세요.",Toast.LENGTH_SHORT).show()
+                CyberDashboardWidgetProvider.updateAll(this)
+                Toast.makeText(this,"버튼에 앱을 지정했습니다. 홈 위젯에도 반영했습니다.",Toast.LENGTH_SHORT).show()
             }.setNegativeButton("취소",null).show()
     }
 
