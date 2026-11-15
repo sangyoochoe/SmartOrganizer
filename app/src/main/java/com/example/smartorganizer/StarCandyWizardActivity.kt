@@ -93,7 +93,7 @@ class StarCandyWizardActivity : Activity() {
         option("홈화면","매일 쓰는 화면에 배경 적용",target==WallpaperManager.FLAG_SYSTEM) { target=WallpaperManager.FLAG_SYSTEM; render() }
         option("충전 배경화면","충전 연결 시 사용할 영상·이미지",false) { startActivity(Intent(this,WallpaperStudioActivity::class.java)) }
         option("아이콘","테마 아이콘을 커스텀 런처에 배치",false) { startActivity(Intent(this,LauncherActivity::class.java)) }
-        option("퀵패널 자료 ZIP","선택 사진 ZIP 내보내기 · 삼성 퀵패널 자동 변경은 지원하지 않음",false) { exportZip() }
+        option("퀵패널 아이콘 제작","달·태양·비행기·손전등 등 아이콘을 직접 그려 PNG로 저장",false) { startActivity(Intent(this,QuickPanelIconStudioActivity::class.java)) }
         option("원본 사진 관리","사진을 고르고 이 기기에 적용",false) { pickPhoto() }
         option("자료 풀세트 다운로드","선택한 사진을 ZIP으로 저장",false) { exportZip() }
         option("홈·잠금 배경 초기화","삼성 기본 배경 복원은 설정에서 직접 진행",false) {
