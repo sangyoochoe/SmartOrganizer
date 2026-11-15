@@ -25,7 +25,12 @@ class CyberDashboardWidgetProvider : AppWidgetProvider() {
             prefs.edit().putBoolean(KEY_BOOST, !prefs.getBoolean(KEY_BOOST, false)).apply()
             updateAll(context)
         } else if (intent.action == Intent.ACTION_DATE_CHANGED ||
-            intent.action == Intent.ACTION_TIME_CHANGED || intent.action == Intent.ACTION_TIMEZONE_CHANGED) {
+            intent.action == Intent.ACTION_TIME_CHANGED ||
+            intent.action == Intent.ACTION_TIMEZONE_CHANGED ||
+            intent.action == Intent.ACTION_BATTERY_LOW ||
+            intent.action == Intent.ACTION_BATTERY_OKAY ||
+            intent.action == Intent.ACTION_POWER_CONNECTED ||
+            intent.action == Intent.ACTION_POWER_DISCONNECTED) {
             updateAll(context)
         }
     }
@@ -50,6 +55,15 @@ class CyberDashboardWidgetProvider : AppWidgetProvider() {
             val percent = if (level >= 0 && scale > 0) level * 100 / scale else -1
 
             val views = RemoteViews(context.packageName, R.layout.widget_cyber_dashboard)
+            val options = manager.getAppWidgetOptions(id)
+            val minWidth = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 250)
+            val minHeight = options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT, 160)
+            val compactWidth = minWidth < 230
+            val compactHeight = minHeight < 145
+            views.setViewVisibility(R.id.widget_header, if (compactHeight) android.view.View.GONE else android.view.View.VISIBLE)
+            views.setViewVisibility(R.id.widget_date, if (compactHeight) android.view.View.GONE else android.view.View.VISIBLE)
+            views.setViewVisibility(R.id.widget_left, if (compactWidth) android.view.View.GONE else android.view.View.VISIBLE)
+            views.setViewVisibility(R.id.widget_right, if (compactWidth) android.view.View.GONE else android.view.View.VISIBLE)
             val now = System.currentTimeMillis()
             val dayStart = now - (now % 86_400_000L)
             val chronometerBase = SystemClock.elapsedRealtime() - (now - dayStart)
