@@ -131,6 +131,10 @@ class MainActivity : Activity() {
             text = "⚡ 사이버 포뮬러 대시보드"
             setOnClickListener { startActivity(Intent(this@MainActivity, CyberDashboardActivity::class.java)) }
         }
+        val desktopStudioButton = Button(this).apply {
+            text = "🖥 AI 데스크톱 스튜디오"
+            setOnClickListener { startActivity(Intent(this@MainActivity, DesktopStudioActivity::class.java)) }
+        }
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(scanButton)
@@ -148,6 +152,7 @@ class MainActivity : Activity() {
             addView(launcherButton)
             addView(sailorMoonButton)
             addView(cyberDashboardButton)
+            addView(desktopStudioButton)
         }
         val scroll = ScrollView(this)
         results = LinearLayout(this).apply {
