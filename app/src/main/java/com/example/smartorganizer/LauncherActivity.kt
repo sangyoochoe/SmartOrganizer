@@ -24,13 +24,51 @@ class LauncherActivity : Activity() {
     private lateinit var grid: GridLayout
     private lateinit var title: TextView
     private var editing = false
-    private val expanded get() = resources.configuration.screenWidthDp >= 600
-    private val layoutKey get() = if (expanded) "apps_expanded" else "apps_folded"
-    private val layoutName get() = if (expanded) "펼친 화면" else "접힌 화면"
+    private var foldState: FoldStateMonitor.State? = null
+    private lateinit var foldMonitor: FoldStateMonitor
+    private val posture get() = foldState?.posture ?: if (resources.configuration.screenWidthDp >= 600)
+        FoldStateMonitor.Posture.OPEN_OR_FLAT else FoldStateMonitor.Posture.COVER_OR_COMPACT
+    private val expanded get() = posture == FoldStateMonitor.Posture.OPEN_OR_FLAT
+    private val layoutKey get() = when (posture) {
+        FoldStateMonitor.Posture.COVER_OR_COMPACT -> "apps_folded"
+        FoldStateMonitor.Posture.BOOK -> "apps_book"
+        FoldStateMonitor.Posture.TABLETOP -> "apps_tabletop"
+        FoldStateMonitor.Posture.OPEN_OR_FLAT -> "apps_expanded"
+    }
+    private val layoutName get() = when (posture) {
+        FoldStateMonitor.Posture.COVER_OR_COMPACT -> "커버 화면"
+        FoldStateMonitor.Posture.BOOK -> "북 모드"
+        FoldStateMonitor.Posture.TABLETOP -> "플렉스·탁상 모드"
+        FoldStateMonitor.Posture.OPEN_OR_FLAT -> "내부 펼친 화면"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        foldMonitor = FoldStateMonitor(this) { next ->
+            val oldKey = layoutKey
+            foldState = next
+            if (oldKey != layoutKey) {
+                title.text = "나의 공간 · $layoutName"
+                grid.columnCount = when (posture) {
+                    FoldStateMonitor.Posture.COVER_OR_COMPACT -> 4
+                    FoldStateMonitor.Posture.BOOK -> 5
+                    FoldStateMonitor.Posture.TABLETOP -> 4
+                    FoldStateMonitor.Posture.OPEN_OR_FLAT -> 6
+                }
+                renderApps()
+            }
+        }
         buildHome()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        foldMonitor.start()
+    }
+
+    override fun onPause() {
+        foldMonitor.stop()
+        super.onPause()
     }
 
     private fun buildHome() {
@@ -64,7 +102,12 @@ class LauncherActivity : Activity() {
             addView(actionButton("편집") { editing = !editing; title.text = if (editing) "아이콘을 길게 눌러 배치 편집" else "나의 공간 · $layoutName" })
         }
         grid = GridLayout(this)
-        grid.columnCount = if (expanded) 6 else 4
+        grid.columnCount = when (posture) {
+            FoldStateMonitor.Posture.COVER_OR_COMPACT -> 4
+            FoldStateMonitor.Posture.BOOK -> 5
+            FoldStateMonitor.Posture.TABLETOP -> 4
+            FoldStateMonitor.Posture.OPEN_OR_FLAT -> 6
+        }
         grid.setPadding(0, dp(12), 0, dp(12))
         grid.setOnDragListener { _, event ->
             if (event.action == DragEvent.ACTION_DROP) {
@@ -78,7 +121,7 @@ class LauncherActivity : Activity() {
         content.addView(toolbar)
         content.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         content.addView(TextView(this).apply {
-            text = "사진 속 여백을 고려해 앱을 배치하세요. 접힌 화면과 펼친 화면의 배치는 따로 저장됩니다."
+            text = "현재 화면: $layoutName · 커버·북·탁상·펼침 상태별 앱 배치를 따로 저장합니다."
             textSize = 12f
             setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
