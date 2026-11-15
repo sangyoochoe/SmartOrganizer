@@ -20,6 +20,7 @@ android {
 }
 dependencies {
     implementation("androidx.documentfile:documentfile:1.0.1")
+    implementation("androidx.window:window-java:1.3.0")
     implementation("com.google.mlkit:image-labeling:17.0.9")
     implementation("com.google.mlkit:object-detection:17.0.2")
 }
