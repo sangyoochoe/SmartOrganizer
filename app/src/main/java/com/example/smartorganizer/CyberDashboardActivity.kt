@@ -41,6 +41,7 @@ class CyberDashboardActivity : Activity() {
 
     override fun onCreate(savedInstanceState:Bundle?) {
         super.onCreate(savedInstanceState)
+        boost = getSharedPreferences("cyber_dashboard", MODE_PRIVATE).getBoolean("widget_boost", false)
         val root=LinearLayout(this).apply { orientation=LinearLayout.VERTICAL; gravity=Gravity.CENTER; setPadding(dp(18),dp(22),dp(18),dp(22)); setBackgroundColor(Color.rgb(3,9,17)) }
         root.addView(TextView(this).apply { text="ASURADA  /  CYBER FORMULA"; textSize=14f; letterSpacing=.2f; setTextColor(0xff69dfff.toInt()); gravity=Gravity.CENTER })
         clock=TextView(this).apply { textSize=48f; typeface=android.graphics.Typeface.MONOSPACE; setTextColor(Color.WHITE); gravity=Gravity.CENTER; setPadding(0,dp(22),0,0) }
@@ -59,6 +60,7 @@ class CyberDashboardActivity : Activity() {
         root.addView(TextView(this).apply { text="화면 터치: 부스터 모드 전환 · 좌/우 버튼: 실행할 앱 지정"; textSize=11f; gravity=Gravity.CENTER; setTextColor(0xff7893a7.toInt()); setPadding(0,dp(10),0,0) })
         panel.setOnClickListener { boost=!boost; updateMode() }
         setContentView(root)
+        updateMode()
     }
 
     private fun updateMode() {
