@@ -150,6 +150,7 @@ class WidgetStudioActivity : Activity() {
                 .put("label", item.label).put("value", item.value))
         }
         prefs.edit().putString("layout", array.toString()).apply()
+        OrganizerCustomWidgetProvider.updateAll(this)
     }
 
     private fun load() {
