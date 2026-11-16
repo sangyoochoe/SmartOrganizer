@@ -403,11 +403,20 @@ class MainActivity : Activity() {
     }
 
     private fun isProtectedPath(entry: Entry): Boolean {
-        val parts = entry.relativePath.replace('\\', '/').split('/')
-        val first = parts.firstOrNull()?.trim().orEmpty()
-        return first.equals("Android", true) ||
-            listOf("system", "vendor", "product", "apex", "data", "obb").any { first.equals(it, true) } ||
-            parts.any { it == ".." }
+        // The selected SAF root may prefix the path (e.g. "Internal storage").
+        // Inspect every component to catch nested Android/data and Android/obb.
+        val parts = entry.relativePath.replace('\\', '/')
+            .split('/')
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+        val protectedNames = setOf(
+            "android", "data", "obb", "system", "vendor", "product", "apex",
+            "proc", "sys", "dev", "metadata"
+        )
+        return parts.any { part ->
+            part == ".." || part == "." ||
+                part.lowercase(java.util.Locale.ROOT) in protectedNames
+        }
     }
 
     private fun detectFileSignature(uri: Uri): String {
@@ -1102,6 +1111,10 @@ class MainActivity : Activity() {
     }
 
     private fun confirmBulkDelete() {
+        if (getSharedPreferences("quick_actions", MODE_PRIVATE).getBoolean("safe_mode", false)) {
+            toast("빠른 설정의 '안전 정리 모드'가 켜져 있어 일괄 삭제가 차단되었습니다.")
+            return
+        }
         val chosen = entries.filter { checkedEntries.contains(it.uri.toString()) && !it.directory }
         if (chosen.isEmpty()) { toast("먼저 파일 왼쪽 체크박스를 선택하세요."); return }
         AlertDialog.Builder(this).setTitle("${chosen.size}개 파일 일괄 삭제")
