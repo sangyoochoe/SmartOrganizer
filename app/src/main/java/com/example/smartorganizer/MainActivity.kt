@@ -39,6 +39,7 @@ class MainActivity : Activity() {
     private lateinit var bulkDeleteButton: Button
     private lateinit var duplicateButton: Button
     private lateinit var insightButton: Button
+    private lateinit var classifyButton: Button
     private lateinit var apkButton: Button
     private lateinit var appsButton: Button
     private lateinit var archiveButton: Button
@@ -104,6 +105,11 @@ class MainActivity : Activity() {
             isEnabled = false
             setOnClickListener { showOrganizationInsights() }
         }
+        classifyButton = Button(this).apply {
+            text = "파일 유형 자동 분류·이동 추천"
+            isEnabled = false
+            setOnClickListener { showAutoFileClassification() }
+        }
         apkButton = Button(this).apply {
             text = "APK 권한·버전 검사"
             isEnabled = false
@@ -153,6 +159,7 @@ class MainActivity : Activity() {
             addView(manageFoldersButton)
             addView(duplicateButton)
             addView(insightButton)
+            addView(classifyButton)
             addView(apkButton)
             addView(archiveButton)
             addView(historyButton)
@@ -340,6 +347,7 @@ class MainActivity : Activity() {
                     (if (truncated) "\n안전 제한: ${MAX_SCAN_ENTRIES}개 항목까지만 검사했습니다." else "")
                 duplicateButton.isEnabled = files.isNotEmpty()
                 insightButton.isEnabled = files.isNotEmpty()
+                classifyButton.isEnabled = files.isNotEmpty()
                 apkButton.isEnabled = files.isNotEmpty()
                 archiveButton.isEnabled = files.any { it.name.endsWith(".zip", true) }
                 renderEntries(entries)
@@ -364,6 +372,62 @@ class MainActivity : Activity() {
         if (totals.isEmpty()) addLine("집계할 폴더가 없습니다.")
         totals.entries.sortedByDescending { it.value }.take(500).forEach { (folder, size) -> addLine("📁 $folder · ${humanSize(size)}") }
         summary.text = "폴더별 용량 집계 완료 · 검사된 파일 ${files.size}개 기준"
+    }
+
+    private fun classifyFile(entry: Entry): String {
+        val n = entry.name.lowercase(java.util.Locale.ROOT)
+        val ext = n.substringAfterLast('.', "")
+        return when {
+            ext in setOf("jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "dng", "raw") -> "사진"
+            ext in setOf("mp4", "m4v", "mov", "mkv", "avi", "webm", "3gp") -> "동영상"
+            ext in setOf("mp3", "m4a", "aac", "wav", "flac", "ogg", "opus") -> "음악"
+            ext in setOf("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "rtf", "odt", "ods", "odp", "hwp", "hwpx", "md", "csv") -> "문서"
+            ext in setOf("zip", "7z", "rar", "tar", "gz", "bz2") -> "압축 파일"
+            ext in setOf("apk", "apks", "aab", "dex", "so", "jar", "exe", "dll") -> "설치·실행 파일 (이동 제한)"
+            n.startsWith(".") || ext in setOf("db", "sqlite", "bak", "conf", "ini", "xml", "json", "dat") -> "설정·데이터 (이동 제외 권장)"
+            else -> "기타 파일"
+        }
+    }
+
+    private fun isProtectedPath(entry: Entry): Boolean {
+        val parts = entry.relativePath.replace('\\\\', '/').split('/')
+        val first = parts.firstOrNull()?.trim().orEmpty()
+        return first.equals("Android", true) ||
+            listOf("system", "vendor", "product", "apex", "data", "obb").any { first.equals(it, true) } ||
+            parts.any { it == ".." }
+    }
+
+    private fun showAutoFileClassification() {
+        val files = entries.filter { !it.directory }
+        if (files.isEmpty()) { toast("먼저 폴더를 스캔하세요."); return }
+        val groups = files.groupBy { classifyFile(it) }.toSortedMap()
+        results.removeAllViews()
+        addLine("파일 유형 자동 분류 추천", true)
+        addLine("확장자와 파일명 기반 추천입니다. 파일 내용 검증이나 악성코드 판정은 아닙니다.")
+        addLine("보호 경로·설정 데이터·설치 파일은 이동 대상에서 제외하거나 별도 주의가 필요합니다.")
+        groups.forEach { (category, group) ->
+            addLine("$category · ${group.size}개", true)
+            group.take(200).forEach { entry ->
+                val blocked = isProtectedPath(entry) ||
+                    category.contains("이동 제한") || category.contains("이동 제외")
+                val row = TextView(this).apply {
+                    text = (if (blocked) "🔒 " else "📄 ") + entry.relativePath + " · " + humanSize(entry.size)
+                    textSize = 13f
+                    setPadding(8, 7, 4, 7)
+                    if (!blocked) setOnClickListener {
+                        AlertDialog.Builder(this@MainActivity)
+                            .setTitle("분류 이동")
+                            .setMessage("추천 분류: $category\n원본: ${entry.relativePath}\n\n목적지 폴더를 선택하면 먼저 복사·크기를 검증합니다. 원본 삭제는 별도 승인 전까지 하지 않습니다.")
+                            .setNegativeButton("취소", null)
+                            .setPositiveButton("목적지 선택") { _, _ -> chooseMoveDestination(entry) }
+                            .show()
+                    }
+                }
+                results.addView(row)
+            }
+            if (group.size > 200) addLine("화면 표시 제한: 나머지 ${group.size - 200}개 생략")
+        }
+        summary.text = "파일 분류 추천 완료 · ${files.size}개 · 자동 이동/삭제 없음"
     }
 
     private fun showOrganizationInsights() {
@@ -814,10 +878,23 @@ class MainActivity : Activity() {
     private fun showAppDetails(label: String, packageName: String) {
         try {
             val info = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
-            val version = packageManager.getPackageInfo(packageName, 0).versionName ?: "알 수 없음"
+            @Suppress("DEPRECATION")
+            val packageInfo = packageManager.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS)
+            val version = packageInfo.versionName ?: "알 수 없음"
+            val requested = packageInfo.requestedPermissions?.toList() ?: emptyList()
+            val dangerous = requested.filter { permission ->
+                try {
+                    packageManager.getPermissionInfo(permission, 0).protectionLevel and
+                        android.content.pm.PermissionInfo.PROTECTION_MASK_BASE ==
+                        android.content.pm.PermissionInfo.PROTECTION_DANGEROUS
+                } catch (_: Exception) { false }
+            }
             val custom = getSharedPreferences("app_categories", MODE_PRIVATE).getString(packageName, "자동 분류")
+            val permissionSummary = if (dangerous.isEmpty()) "선언된 위험 권한 없음 또는 확인 불가" else
+                dangerous.take(12).joinToString("\\n") { "• $it" } +
+                    if (dangerous.size > 12) "\\n… 외 ${dangerous.size - 12}개" else ""
             AlertDialog.Builder(this).setTitle(label)
-                .setMessage("패키지: $packageName\n버전: $version\n분류: $custom\n시스템 앱 여부: ${if (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM != 0) "시스템 앱" else "사용자 설치 앱"}\n\n앱 권한과 저장공간 사용량은 Android 설정에서 실제 상태를 확인하세요.")
+                .setMessage("패키지: $packageName\n버전: $version\n분류: $custom\n시스템 앱 여부: ${if (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM != 0) "시스템 앱" else "사용자 설치 앱"}\n요청 권한: ${requested.size}개 · 위험 권한 선언: ${dangerous.size}개\n$permissionSummary\n\n위 항목은 앱이 선언한 권한입니다. 실제 허용 상태는 Android 앱 정보에서 확인하세요.")
                 .setPositiveButton("앱 정보·권한 열기") { _, _ ->
                     try {
                         startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
@@ -909,6 +986,7 @@ class MainActivity : Activity() {
         manageFoldersButton.isEnabled = !busy
         duplicateButton.isEnabled = !busy && entries.any { !it.directory }
         insightButton.isEnabled = !busy && entries.any { !it.directory }
+        classifyButton.isEnabled = !busy && entries.any { !it.directory }
         apkButton.isEnabled = !busy && entries.any { !it.directory }
         archiveButton.isEnabled = !busy && entries.any { !it.directory && it.name.endsWith(".zip", true) }
         appsButton.isEnabled = !busy
