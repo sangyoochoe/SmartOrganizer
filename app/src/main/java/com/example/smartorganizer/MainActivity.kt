@@ -741,7 +741,9 @@ class MainActivity : Activity() {
 
     companion object {
         private const val REQUEST_TREE = 7101
-        private const val REQUEST_FILES = 7102\n        private const val REQUEST_FULL_TREE = 7103\n        private const val MAX_SCAN_ENTRIES = 100000
+        private const val REQUEST_FILES = 7102
+        private const val REQUEST_FULL_TREE = 7103
+        private const val MAX_SCAN_ENTRIES = 100000
         private const val LARGE_FILE_BYTES = 100L * 1024L * 1024L
         private const val OLD_FILE_AGE = 180L * 24L * 60L * 60L * 1000L
         private val ARCHIVE_SCRIPT_EXTENSIONS = listOf(".sh", ".bat", ".cmd", ".ps1", ".js", ".vbs", ".py", ".jar")
