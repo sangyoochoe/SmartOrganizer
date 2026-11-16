@@ -90,7 +90,7 @@ class AndroidWidgetHostActivity : Activity() {
     private fun finishBinding(provider: AppWidgetProviderInfo) {
         val configure = provider.configure
         if (configure != null) {
-            val intent = Intent(AppWidgetManager.ACTION_APPWIDGET_CONFIGURE).apply {
+            val intent = Intent().apply {
                 component = configure
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingId)
             }
