@@ -45,6 +45,7 @@ class MainActivity : Activity() {
     private lateinit var historyButton: Button
     private lateinit var launcherButton: Button
     private lateinit var wallpaperButton: Button
+    private var pendingMoveEntry: Entry? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -200,6 +201,19 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (resultCode != RESULT_OK) return
+        if (requestCode == REQUEST_MOVE_DESTINATION) {
+            val source = pendingMoveEntry
+            pendingMoveEntry = null
+            val destinationUri = data?.data
+            if (source != null && destinationUri != null) {
+                try {
+                    val flags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                    contentResolver.takePersistableUriPermission(destinationUri, flags)
+                } catch (_: Exception) {}
+                copyThenOfferMove(source, destinationUri)
+            }
+            return
+        }
         if (requestCode == REQUEST_FILES) {
             val clip = data?.clipData
             val uris = if (clip != null) (0 until clip.itemCount).map { clip.getItemAt(it).uri } else listOfNotNull(data?.data)
@@ -387,7 +401,7 @@ class MainActivity : Activity() {
     }
 
     private fun showFileActions(entry: Entry) {
-        val options = arrayOf("파일 정보 보기", "이름 변경", "삭제")
+        val options = arrayOf("파일 정보 보기", "이름 변경", "안전한 폴더로 이동·재분류", "삭제")
         AlertDialog.Builder(this)
             .setTitle(entry.name)
             .setItems(options) { _, which ->
@@ -396,7 +410,8 @@ class MainActivity : Activity() {
                         "경로: ${entry.relativePath}\n크기: ${humanSize(entry.size)}\n수정: ${formatDate(entry.modified)}"
                     ).setPositiveButton("확인", null).show()
                     1 -> renameEntry(entry)
-                    2 -> confirmDelete(entry)
+                    2 -> chooseMoveDestination(entry)
+                    3 -> confirmDelete(entry)
                 }
             }.setNegativeButton("닫기", null).show()
     }
@@ -418,6 +433,80 @@ class MainActivity : Activity() {
                     if (ok) if (selectedTrees.isNotEmpty()) scanSelectedFolders()
                 }
             }.show()
+    }
+
+
+    private fun chooseMoveDestination(entry: Entry) {
+        val path = entry.relativePath.replace('\\\\', '/')
+        val first = path.substringBefore('/')
+        val protected = first.equals("Android", true) ||
+            listOf("system", "vendor", "product", "apex", "data", "obb").any { first.equals(it, true) } ||
+            path.split('/').any { it == ".." }
+        if (protected) { toast("시스템·앱 데이터 보호 경로로 판단되어 이동을 차단했습니다."); return }
+        if (listOf(".apk", ".apks", ".aab", ".dex", ".so").any { entry.name.endsWith(it, true) }) {
+            toast("설치·실행 관련 파일은 자동 재분류 이동 대상에서 제외합니다."); return
+        }
+        pendingMoveEntry = entry
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+        }
+        startActivityForResult(intent, REQUEST_MOVE_DESTINATION)
+    }
+
+    private fun copyThenOfferMove(entry: Entry, destinationUri: Uri) {
+        val destination = DocumentFile.fromTreeUri(this, destinationUri)
+        if (destination == null || !destination.isDirectory || !destination.canWrite()) {
+            toast("선택한 목적지에 쓸 수 없습니다."); return
+        }
+        if (entry.name.isBlank() || entry.name == "." || entry.name == ".." || entry.name.contains('/')) {
+            toast("안전하지 않은 파일 이름이어서 이동을 취소했습니다."); return
+        }
+        val output = try { destination.createFile(contentResolver.getType(entry.uri) ?: "application/octet-stream", entry.name) } catch (_: Exception) { null }
+        if (output == null) { toast("목적지에 파일을 만들 수 없습니다. 같은 이름의 파일이 있는지 확인하세요."); return }
+        setBusy(true, "파일을 복사하고 크기를 검증하는 중입니다…")
+        worker.execute {
+            var bytes = 0L
+            try {
+                contentResolver.openInputStream(entry.uri).use { input ->
+                    if (input == null) throw IllegalStateException("원본을 읽을 수 없습니다.")
+                    contentResolver.openOutputStream(output.uri, "w").use { out ->
+                        if (out == null) throw IllegalStateException("목적지에 쓸 수 없습니다.")
+                        val buffer = ByteArray(64 * 1024)
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            out.write(buffer, 0, n)
+                            bytes += n
+                        }
+                        out.flush()
+                    }
+                }
+                if (bytes != entry.size || output.length() != entry.size) throw IllegalStateException("원본과 복사본 크기가 일치하지 않습니다.")
+            } catch (e: Exception) {
+                try { output.delete() } catch (_: Exception) {}
+                runOnUiThread { setBusy(false); toast("복사 실패: " + (e.localizedMessage ?: "파일 접근 오류")) }
+                return@execute
+            }
+            runOnUiThread {
+                setBusy(false)
+                AlertDialog.Builder(this).setTitle("복사 및 검증 완료")
+                    .setMessage(entry.name + "\n복사 크기: " + humanSize(bytes) + "\n\n원본을 삭제해 이동을 완료할까요? 원본 삭제는 사용자가 최종 승인해야 합니다.")
+                    .setNegativeButton("복사본만 유지") { _, _ ->
+                        recordOperation("재분류 복사", entry.relativePath, output.uri.toString())
+                        toast("복사본을 저장했습니다. 원본은 유지했습니다.")
+                        if (selectedTrees.isNotEmpty()) scanSelectedFolders()
+                    }
+                    .setPositiveButton("원본도 삭제하여 이동") { _, _ ->
+                        val source = DocumentFile.fromSingleUri(this, entry.uri)
+                        val deleted = try { source?.delete() == true } catch (_: Exception) { false }
+                        if (deleted) {
+                            recordOperation("안전 이동", entry.relativePath, output.uri.toString())
+                            toast("검증 후 원본을 삭제해 이동했습니다.")
+                        } else toast("복사본은 생성했지만 원본 삭제 권한이 없어 두 파일이 모두 남아 있습니다.")
+                        if (selectedTrees.isNotEmpty()) scanSelectedFolders()
+                    }.show()
+            }
+        }
     }
 
     private fun confirmDelete(entry: Entry) {
@@ -780,6 +869,7 @@ class MainActivity : Activity() {
         private const val REQUEST_TREE = 7101
         private const val REQUEST_FILES = 7102
         private const val REQUEST_FULL_TREE = 7103
+        private const val REQUEST_MOVE_DESTINATION = 7104
         private const val MAX_SCAN_ENTRIES = 100000
         private const val LARGE_FILE_BYTES = 100L * 1024L * 1024L
         private const val OLD_FILE_AGE = 180L * 24L * 60L * 60L * 1000L
