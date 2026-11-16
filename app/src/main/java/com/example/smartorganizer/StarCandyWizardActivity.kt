@@ -136,9 +136,39 @@ class StarCandyWizardActivity : Activity() {
             contentResolver.openInputStream(uri).use { input ->
                 if(input==null) error("사진을 열 수 없습니다.")
                 ZipOutputStream(file.outputStream()).use { zip ->
-                    zip.putNextEntry(ZipEntry("wallpaper.jpg")); input.copyTo(zip); zip.closeEntry()
+                    val mime = contentResolver.getType(uri).orEmpty()
+                    val extension = when {
+                        mime.contains("png", true) -> "png"
+                        mime.contains("webp", true) -> "webp"
+                        mime.contains("gif", true) -> "gif"
+                        else -> "jpg"
+                    }
+                    zip.putNextEntry(ZipEntry("assets/wallpaper.$extension"))
+                    input.copyTo(zip)
+                    zip.closeEntry()
+
+                    val themeJson = org.json.JSONObject()
+                        .put("format", "smart-organizer-theme")
+                        .put("formatVersion", 1)
+                        .put("deviceProfile", device)
+                        .put("themeName", theme)
+                        .put("screenProfile", screen)
+                        .put("wallpaperTarget", if (target == WallpaperManager.FLAG_LOCK) "lock" else "home")
+                        .put("wallpaperAsset", "assets/wallpaper.$extension")
+                        .put("createdAt", System.currentTimeMillis())
+                        .put("notes", "Wallpaper asset and portable theme metadata. Samsung One UI icon, Quick Panel and cover/inner targeting require supported Samsung tools or manual setup.")
+                    zip.putNextEntry(ZipEntry("theme.json"))
+                    zip.write(themeJson.toString(2).toByteArray(Charsets.UTF_8))
+                    zip.closeEntry()
+
                     zip.putNextEntry(ZipEntry("README.txt"))
-                    zip.write(("기종: "+device+"\n테마: "+theme+"\n사용자 선택 사진\n").toByteArray(Charsets.UTF_8)); zip.closeEntry()
+                    zip.write(("Smart Organizer Theme Package\\n" +
+                        "기종 프로필: "+device+"\\n테마: "+theme+"\\n화면 프로필: "+screen+"\\n" +
+                        "배경 대상: "+(if(target == WallpaperManager.FLAG_LOCK) "잠금화면" else "홈화면")+"\\n\\n" +
+                        "포함 파일: theme.json, assets/wallpaper.$extension\\n" +
+                        "이 패키지는 배경 이미지와 설정 메타데이터를 보관합니다. 삼성 One UI 아이콘·퀵패널 테마를 자동 설치하지는 않습니다.\\n")
+                        .toByteArray(Charsets.UTF_8))
+                    zip.closeEntry()
                 }
             }
             pendingZip=file
