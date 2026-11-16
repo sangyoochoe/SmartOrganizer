@@ -40,6 +40,7 @@ class MainActivity : Activity() {
     private lateinit var duplicateButton: Button
     private lateinit var insightButton: Button
     private lateinit var classifyButton: Button
+    private lateinit var contentAuditButton: Button
     private lateinit var apkButton: Button
     private lateinit var appsButton: Button
     private lateinit var archiveButton: Button
@@ -111,6 +112,11 @@ class MainActivity : Activity() {
             isEnabled = false
             setOnClickListener { showAutoFileClassification() }
         }
+        contentAuditButton = Button(this).apply {
+            text = "파일 내용 시그니처 검사"
+            isEnabled = false
+            setOnClickListener { auditFileSignatures() }
+        }
         apkButton = Button(this).apply {
             text = "APK 권한·버전 검사"
             isEnabled = false
@@ -161,6 +167,7 @@ class MainActivity : Activity() {
             addView(duplicateButton)
             addView(insightButton)
             addView(classifyButton)
+            addView(contentAuditButton)
             addView(apkButton)
             addView(archiveButton)
             addView(historyButton)
@@ -353,6 +360,7 @@ class MainActivity : Activity() {
                 duplicateButton.isEnabled = files.isNotEmpty()
                 insightButton.isEnabled = files.isNotEmpty()
                 classifyButton.isEnabled = files.isNotEmpty()
+                contentAuditButton.isEnabled = files.isNotEmpty()
                 apkButton.isEnabled = files.isNotEmpty()
                 archiveButton.isEnabled = files.any { it.name.endsWith(".zip", true) }
                 renderEntries(entries)
@@ -400,6 +408,66 @@ class MainActivity : Activity() {
         return first.equals("Android", true) ||
             listOf("system", "vendor", "product", "apex", "data", "obb").any { first.equals(it, true) } ||
             parts.any { it == ".." }
+    }
+
+    private fun detectFileSignature(uri: Uri): String {
+        val header = ByteArray(16)
+        val count = try {
+            contentResolver.openInputStream(uri)?.use { input -> input.read(header) } ?: -1
+        } catch (_: Exception) { -1 }
+        if (count <= 0) return "읽기 불가"
+        fun starts(vararg bytes: Int): Boolean =
+            count >= bytes.size && bytes.indices.all { (header[it].toInt() and 0xff) == bytes[it] }
+        return when {
+            starts(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a) -> "PNG 이미지"
+            starts(0xff, 0xd8, 0xff) -> "JPEG 이미지"
+            starts(0x47, 0x49, 0x46, 0x38) -> "GIF 이미지"
+            starts(0x25, 0x50, 0x44, 0x46) -> "PDF 문서"
+            starts(0x50, 0x4b, 0x03, 0x04) || starts(0x50, 0x4b, 0x05, 0x06) -> "ZIP 컨테이너"
+            starts(0x52, 0x61, 0x72, 0x21) -> "RAR 압축"
+            starts(0x37, 0x7a, 0xbc, 0xaf, 0x27, 0x1c) -> "7Z 압축"
+            starts(0x4f, 0x67, 0x67, 0x53) -> "OGG 오디오 컨테이너"
+            starts(0x49, 0x44, 0x33) -> "MP3 오디오"
+            count >= 12 && String(header, 0, 4, Charsets.US_ASCII) == "RIFF" &&
+                String(header, 8, 4, Charsets.US_ASCII) == "WEBP" -> "WebP 이미지"
+            count >= 8 && String(header, 4, 4, Charsets.US_ASCII) == "ftyp" -> "MP4/ISO 미디어"
+            starts(0x4d, 0x5a) -> "Windows 실행 파일 형식 (MZ)"
+            starts(0x7f, 0x45, 0x4c, 0x46) -> "ELF 실행 파일"
+            else -> "알 수 없음/시그니처 미지원"
+        }
+    }
+
+    private fun auditFileSignatures() {
+        val snapshot = entries.filter { !it.directory }.toList()
+        if (snapshot.isEmpty()) { toast("먼저 파일을 스캔하세요."); return }
+        setBusy(true, "파일 앞부분 시그니처를 읽어 확장자와 비교 중입니다…")
+        worker.execute {
+            val reports = mutableListOf<String>()
+            snapshot.forEach { entry ->
+                val detected = detectFileSignature(entry.uri)
+                val ext = entry.name.substringAfterLast('.', "").lowercase(java.util.Locale.ROOT)
+                val mismatch = when {
+                    detected == "PNG 이미지" -> ext !in setOf("png")
+                    detected == "JPEG 이미지" -> ext !in setOf("jpg", "jpeg")
+                    detected == "GIF 이미지" -> ext !in setOf("gif")
+                    detected == "PDF 문서" -> ext != "pdf"
+                    detected == "ZIP 컨테이너" -> ext !in setOf("zip", "docx", "xlsx", "pptx", "odt", "ods", "odp", "apks")
+                    detected == "Windows 실행 파일 형식 (MZ)" -> ext !in setOf("exe", "dll")
+                    detected == "ELF 실행 파일" -> ext !in setOf("so", "elf")
+                    else -> false
+                }
+                reports.add((if (mismatch) "⚠ 확장자 불일치 의심" else "✓") +
+                    "\\n${entry.relativePath}\\n확장자: ${if (ext.isEmpty()) "(없음)" else ext} · 내용 시그니처: $detected")
+            }
+            runOnUiThread {
+                results.removeAllViews()
+                addLine("파일 내용 시그니처 검사", true)
+                addLine("파일 앞부분의 알려진 형식 표식만 확인합니다. 전체 파일 무결성·악성 여부·암호화 여부를 판정하지 않습니다.")
+                reports.forEach { addLine(it) }
+                summary.text = "시그니처 검사 완료 · ${snapshot.size}개 파일"
+                setBusy(false)
+            }
+        }
     }
 
     private fun showAutoFileClassification() {
@@ -1095,6 +1163,7 @@ class MainActivity : Activity() {
         duplicateButton.isEnabled = !busy && entries.any { !it.directory }
         insightButton.isEnabled = !busy && entries.any { !it.directory }
         classifyButton.isEnabled = !busy && entries.any { !it.directory }
+        contentAuditButton.isEnabled = !busy && entries.any { !it.directory }
         apkButton.isEnabled = !busy && entries.any { !it.directory }
         archiveButton.isEnabled = !busy && entries.any { !it.directory && it.name.endsWith(".zip", true) }
         appsButton.isEnabled = !busy
