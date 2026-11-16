@@ -46,14 +46,9 @@ class SailorMoonSetupActivity : Activity() {
         card(list,"06  앱 아이콘 커스텀","앱별 이미지 아이콘은 커스텀 런처에서 적용") {
             startActivity(Intent(this,LauncherActivity::class.java))
         }
-        val external=Button(this).apply { text="Good Lock / 테마파크 설정 안내"; setOnClickListener {
-            AlertDialog.Builder(this@SailorMoonSetupActivity)
-                .setTitle("삼성 전용 설정")
-                .setMessage("QuickStar·Wonderland·테마파크는 삼성 Good Lock 모듈에서 마무리해야 합니다. Smart Organizer는 배경·아이콘 자료를 만들고 설정 화면으로 안내합니다.")
-                .setPositiveButton("설정 열기") { _,_ -> openSettings("android.settings.SETTINGS") }
-                .setNegativeButton("닫기",null).show()
-        } }
-        list.addView(external)
+        card(list,"07  Good Lock · QuickStar · 테마파크","설치된 삼성 모듈을 바로 열거나 Galaxy Store에서 설치 페이지를 엽니다.") {
+            showSamsungModules()
+        }
         setContentView(root)
     }
 
@@ -65,6 +60,35 @@ class SailorMoonSetupActivity : Activity() {
         box.addView(TextView(this).apply { text=title+"   →"; textSize=18f; setTextColor(Color.WHITE); setTypeface(null,1) })
         box.addView(TextView(this).apply { text=desc; textSize=12f; setTextColor(0xff9ab0c2.toInt()); setPadding(0,dp(7),0,0) })
         parent.addView(box,LinearLayout.LayoutParams(-1,-2).apply { bottomMargin=dp(10) })
+    }
+
+    private fun showSamsungModules() {
+        val modules = arrayOf(
+            "Good Lock" to "com.samsung.android.goodlock",
+            "QuickStar" to "com.samsung.android.qstuner",
+            "Theme Park" to "com.samsung.android.themecenter",
+            "Wonderland" to "com.samsung.android.wonderland"
+        )
+        AlertDialog.Builder(this).setTitle("삼성 커스터마이징 모듈")
+            .setItems(modules.map { it.first }.toTypedArray()) { _, which ->
+                val (name, packageName) = modules[which]
+                val launch = packageManager.getLaunchIntentForPackage(packageName)
+                if (launch != null) {
+                    try { startActivity(launch) } catch (_: Exception) { openStore(packageName) }
+                } else {
+                    AlertDialog.Builder(this).setMessage("$name 모듈이 설치되어 있지 않습니다. Galaxy Store 페이지를 열까요?")
+                        .setPositiveButton("스토어 열기") { _, _ -> openStore(packageName) }
+                        .setNegativeButton("취소", null).show()
+                }
+            }.setNegativeButton("닫기", null).show()
+    }
+
+    private fun openStore(packageName: String) {
+        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName"))) }
+        catch (_: Exception) {
+            try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://galaxystore.samsung.com/detail/$packageName"))) }
+            catch (_: Exception) { openSettings("android.settings.SETTINGS") }
+        }
     }
 
     private fun openSettings(action:String) {
