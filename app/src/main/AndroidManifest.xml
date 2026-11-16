@@ -38,6 +38,7 @@
         <activity android:name=".SailorMoonSetupActivity" android:exported="false" />
         <activity android:name=".CyberDashboardActivity" android:exported="false" />
         <activity android:name=".DesktopStudioActivity" android:exported="false" />
+        <activity android:name=".AndroidWidgetHostActivity" android:exported="false" />
         <activity android:name=".ChargingPreviewActivity" android:exported="false" />
         <receiver android:name=".CyberDashboardWidgetProvider" android:exported="false">
             <intent-filter>
