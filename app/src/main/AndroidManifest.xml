@@ -41,6 +41,7 @@
         <activity android:name=".SailorMoonSetupActivity" android:exported="false" />
         <activity android:name=".CyberDashboardActivity" android:exported="false" />
         <activity android:name=".DesktopStudioActivity" android:exported="false" />
+        <activity android:name=".WidgetStudioActivity" android:exported="false" />
         <activity android:name=".AndroidWidgetHostActivity" android:exported="false" />
         <service
             android:name=".OrganizerSafetyTileService"
