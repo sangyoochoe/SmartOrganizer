@@ -42,6 +42,16 @@
         <activity android:name=".CyberDashboardActivity" android:exported="false" />
         <activity android:name=".DesktopStudioActivity" android:exported="false" />
         <activity android:name=".AndroidWidgetHostActivity" android:exported="false" />
+        <service
+            android:name=".OrganizerSafetyTileService"
+            android:label="안전 정리 모드"
+            android:icon="@android:drawable/ic_lock_lock"
+            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.service.quicksettings.action.QS_TILE" />
+            </intent-filter>
+        </service>
         <activity android:name=".ChargingPreviewActivity" android:exported="false" />
         <receiver android:name=".CyberDashboardWidgetProvider" android:exported="false">
             <intent-filter>
