@@ -154,7 +154,7 @@ class AndroidWidgetHostActivity : Activity() {
             })
             val widget = host.createView(this, id, info)
             widget.setAppWidget(id, info)
-            widget.updateAppWidgetSize(null, info.minWidth, info.minHeight, info.maxWidth.coerceAtLeast(info.minWidth), info.maxHeight.coerceAtLeast(info.minHeight))
+            widget.updateAppWidgetSize(null, info.minWidth, info.minHeight, info.minWidth, info.minHeight)
             card.addView(widget, LinearLayout.LayoutParams(-1, dp(info.minHeight.coerceIn(100, 360))))
             card.addView(Button(this).apply {
                 text = "이 위젯 삭제"
