@@ -254,9 +254,11 @@ class MainActivity : Activity() {
             val permission = contentResolver.persistedUriPermissions.firstOrNull { it.uri == uri && it.isReadPermission }
             if (permission != null) selectedLooseFiles[value] = uri
         }
-    }    private fun updateFolderSelectionUi() {
-        runScanButton.text = "선택한 폴더 모두 스캔 (${selectedTrees.size}개)"
-        runScanButton.isEnabled = selectedTrees.isNotEmpty()
+    }
+
+    private fun updateFolderSelectionUi() {
+        runScanButton.text = "선택 위치 스캔 (폴더 ${selectedTrees.size}개 · 개별 파일 ${selectedLooseFiles.size}개)"
+        runScanButton.isEnabled = selectedTrees.isNotEmpty() || selectedLooseFiles.isNotEmpty()
         manageFoldersButton.isEnabled = true
         summary.text = "선택된 폴더 ${selectedTrees.size}개 · 폴더 밖 파일 ${selectedLooseFiles.size}개"
     }
