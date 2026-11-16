@@ -238,6 +238,15 @@ class MainActivity : Activity() {
             .putStringSet("uris", selectedTrees.keys.toSet()).apply()
     }
 
+    private fun restoreSelectedTrees() {
+        val saved = getSharedPreferences("scan_folders", MODE_PRIVATE).getStringSet("uris", emptySet()) ?: emptySet()
+        saved.forEach { value ->
+            val uri = Uri.parse(value)
+            val permission = contentResolver.persistedUriPermissions.firstOrNull { it.uri == uri && it.isReadPermission }
+            if (permission != null) selectedTrees[value] = uri
+        }
+    }
+
     private fun restoreLooseFiles() {
         val saved = getSharedPreferences("scan_folders", MODE_PRIVATE).getStringSet("loose_files", emptySet()) ?: emptySet()
         saved.forEach { value ->
@@ -311,7 +320,7 @@ class MainActivity : Activity() {
                 entries.addAll(found)
                 val files = entries.filter { !it.directory }
                 summary.text = "전체 스캔 완료: 폴더 ${roots.size}개 · 개별 파일 ${loose.size}개 · 파일 ${files.size}개 · 하위 폴더 ${entries.count { it.directory }}개 · ${humanSize(files.sumOf { it.size })}" +
-                    (if (inaccessible > 0) "\n일부 위치는 권한 제한 또는 읽기 오류로 제외되었습니다($inaccessible곳)." else "") +
+                    (if (inaccessible > 0) "\n일부 위치는 권한 제한 또는 읽기 오류로 제외되었습니다(${inaccessible}곳)." else "") +
                     (if (truncated) "\n안전 제한: ${MAX_SCAN_ENTRIES}개 항목까지만 검사했습니다." else "")
                 duplicateButton.isEnabled = files.isNotEmpty()
                 insightButton.isEnabled = files.isNotEmpty()
@@ -339,7 +348,33 @@ class MainActivity : Activity() {
         if (totals.isEmpty()) addLine("집계할 폴더가 없습니다.")
         totals.entries.sortedByDescending { it.value }.take(500).forEach { (folder, size) -> addLine("📁 $folder · ${humanSize(size)}") }
         summary.text = "폴더별 용량 집계 완료 · 검사된 파일 ${files.size}개 기준"
-    }    private fun addEntryLine(entry: Entry) {
+    }
+
+    private fun showOrganizationInsights() {
+        val files = entries.filter { !it.directory }
+        if (files.isEmpty()) { toast("먼저 저장소를 스캔하세요."); return }
+        val now = System.currentTimeMillis()
+        val large = files.filter { it.size >= LARGE_FILE_BYTES }.sortedByDescending { it.size }.take(30)
+        val old = files.filter { it.modified > 0L && now - it.modified >= OLD_FILE_AGE }.sortedBy { it.modified }.take(30)
+        val duplicateNames = files.groupBy { it.name.lowercase(java.util.Locale.ROOT) }
+            .filterValues { it.size > 1 }
+        results.removeAllViews()
+        addLine("정리 후보 분석", true)
+        addLine("대용량 파일 (100MB 이상) · ${large.size}개", true)
+        if (large.isEmpty()) addLine("해당 파일이 없습니다.")
+        large.forEach { addLine("${it.relativePath} · ${humanSize(it.size)}") }
+        addLine("오래된 파일 (180일 이상) · ${old.size}개", true)
+        if (old.isEmpty()) addLine("해당 파일이 없습니다.")
+        old.forEach { addLine("${it.relativePath} · ${formatDate(it.modified)}") }
+        addLine("이름이 같은 파일 그룹 · ${duplicateNames.size}개", true)
+        duplicateNames.entries.sortedByDescending { it.value.size }.take(50).forEach { (name, group) ->
+            addLine("$name · ${group.size}개")
+            group.take(5).forEach { addLine("  ${it.relativePath}") }
+        }
+        summary.text = "정리 후보 분석 완료 · 삭제는 사용자가 파일별로 직접 선택해야 합니다."
+    }
+
+    private fun addEntryLine(entry: Entry) {
         val line = TextView(this).apply {
             text = "• ${entry.relativePath} · ${humanSize(entry.size)}"
             textSize = 13f
