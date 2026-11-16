@@ -33,7 +33,7 @@
         android:layout_marginTop="5dp"
         android:textColor="#82EAFF"
         android:textSize="11sp" />
-    <TextView
+    <Chronometer
         android:id="@+id/custom_widget_value_2"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -46,7 +46,7 @@
         android:layout_marginTop="5dp"
         android:textColor="#82EAFF"
         android:textSize="11sp" />
-    <TextView
+    <Chronometer
         android:id="@+id/custom_widget_value_3"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
