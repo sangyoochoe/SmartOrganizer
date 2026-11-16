@@ -47,6 +47,7 @@ class MainActivity : Activity() {
     private lateinit var launcherButton: Button
     private lateinit var wallpaperButton: Button
     private var pendingMoveEntry: Entry? = null
+    private var pendingBatchMoveEntries: List<Entry> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -212,12 +213,16 @@ class MainActivity : Activity() {
             val source = pendingMoveEntry
             pendingMoveEntry = null
             val destinationUri = data?.data
-            if (source != null && destinationUri != null) {
+            if (destinationUri != null) {
                 try {
                     val flags = data.flags and (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
                     contentResolver.takePersistableUriPermission(destinationUri, flags)
                 } catch (_: Exception) {}
-                copyThenOfferMove(source, destinationUri)
+                val batch = pendingBatchMoveEntries
+                if (batch.isNotEmpty()) {
+                    pendingBatchMoveEntries = emptyList()
+                    copyBatchThenOfferMove(batch, destinationUri)
+                } else if (source != null) copyThenOfferMove(source, destinationUri)
             }
             return
         }
@@ -407,6 +412,18 @@ class MainActivity : Activity() {
         addLine("보호 경로·설정 데이터·설치 파일은 이동 대상에서 제외하거나 별도 주의가 필요합니다.")
         groups.forEach { (category, group) ->
             addLine("$category · ${group.size}개", true)
+            val movable = group.filter { entry ->
+                !isProtectedPath(entry) && !category.contains("이동 제한") &&
+                    !category.contains("이동 제외") &&
+                    !listOf(".apk", ".apks", ".aab", ".dex", ".so", ".jar", ".exe", ".dll").any { entry.name.endsWith(it, true) }
+            }
+            if (movable.size > 1) {
+                val batchButton = Button(this).apply {
+                    text = "이 분류 ${movable.size}개 파일 일괄 복사·검증"
+                    setOnClickListener { chooseBatchMoveDestination(movable) }
+                }
+                results.addView(batchButton)
+            }
             group.take(200).forEach { entry ->
                 val blocked = isProtectedPath(entry) ||
                     category.contains("이동 제한") || category.contains("이동 제외")
@@ -515,6 +532,97 @@ class MainActivity : Activity() {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         }
         startActivityForResult(intent, REQUEST_MOVE_DESTINATION)
+    }
+
+    private fun chooseBatchMoveDestination(files: List<Entry>) {
+        val safe = files.filter { !isProtectedPath(it) &&
+            !listOf(".apk", ".apks", ".aab", ".dex", ".so", ".jar", ".exe", ".dll").any { ext -> it.name.endsWith(ext, true) } }
+        if (safe.isEmpty()) { toast("안전하게 이동할 수 있는 파일이 없습니다."); return }
+        AlertDialog.Builder(this)
+            .setTitle("분류 일괄 복사")
+            .setMessage("${safe.size}개 파일을 선택한 폴더로 복사하고 각각 크기를 검증합니다. 이름 충돌·검증 실패 파일은 건너뜁니다. 원본 삭제는 복사 검증 후 별도 승인받습니다.")
+            .setNegativeButton("취소", null)
+            .setPositiveButton("목적지 선택") { _, _ ->
+                pendingMoveEntry = null
+                pendingBatchMoveEntries = safe
+                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                }
+                startActivityForResult(intent, REQUEST_MOVE_DESTINATION)
+            }.show()
+    }
+
+    private fun copyBatchThenOfferMove(files: List<Entry>, destinationUri: Uri) {
+        val destination = DocumentFile.fromTreeUri(this, destinationUri)
+        if (destination == null || !destination.isDirectory || !destination.canWrite()) {
+            toast("선택한 목적지에 쓸 수 없습니다."); return
+        }
+        val destName = (destination.name ?: "").trim().lowercase(java.util.Locale.ROOT)
+        val blockedNames = setOf("android", "data", "obb", "system", "vendor", "product", "apex", "windows", "program files")
+        val uriText = try { Uri.decode(destinationUri.toString()).lowercase(java.util.Locale.ROOT) } catch (_: Exception) { "" }
+        if (destName in blockedNames || listOf("/android/data", "/android/obb", "/system/", "/vendor/", "/product/", "/apex/").any { uriText.contains(it) }) {
+            toast("보호 영역으로 판단되는 목적지라 일괄 복사를 차단했습니다."); return
+        }
+        setBusy(true, "분류 파일 ${files.size}개를 순서대로 복사·검증 중입니다…")
+        worker.execute {
+            val copied = mutableListOf<Pair<Entry, DocumentFile>>()
+            val failed = mutableListOf<String>()
+            for (entry in files) {
+                var output: DocumentFile? = null
+                try {
+                    if (entry.name.isBlank() || entry.name == "." || entry.name == ".." || entry.name.contains('/'))
+                        throw IllegalStateException("안전하지 않은 파일 이름")
+                    output = destination.createFile(contentResolver.getType(entry.uri) ?: "application/octet-stream", entry.name)
+                        ?: throw IllegalStateException("같은 이름이 있거나 생성 불가")
+                    var bytes = 0L
+                    contentResolver.openInputStream(entry.uri).use { input ->
+                        if (input == null) throw IllegalStateException("원본 읽기 실패")
+                        contentResolver.openOutputStream(output.uri, "w").use { out ->
+                            if (out == null) throw IllegalStateException("목적지 쓰기 실패")
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                val n = input.read(buffer)
+                                if (n < 0) break
+                                out.write(buffer, 0, n)
+                                bytes += n
+                            }
+                            out.flush()
+                        }
+                    }
+                    if (bytes != entry.size || output.length() != entry.size)
+                        throw IllegalStateException("크기 검증 실패")
+                    copied.add(entry to output)
+                } catch (e: Exception) {
+                    try { output?.delete() } catch (_: Exception) {}
+                    failed.add("${entry.name}: ${e.localizedMessage ?: "복사 실패"}")
+                }
+            }
+            runOnUiThread {
+                setBusy(false)
+                if (copied.isEmpty()) {
+                    AlertDialog.Builder(this).setTitle("일괄 복사 결과")
+                        .setMessage("검증에 성공한 파일이 없습니다. 실패 ${failed.size}개")
+                        .setPositiveButton("확인", null).show()
+                } else {
+                    AlertDialog.Builder(this).setTitle("일괄 복사·검증 완료")
+                        .setMessage("성공 ${copied.size}개 · 실패 ${failed.size}개\n실패 예시: ${failed.take(5).joinToString("\\n")}\n\n검증 성공한 원본을 삭제해 이동을 완료할까요? 실패한 파일은 원본을 유지합니다.")
+                        .setNegativeButton("복사본만 유지") { _, _ ->
+                            copied.forEach { (src, dst) -> recordOperation("분류 일괄 복사", src.relativePath, dst.uri.toString()) }
+                            toast("검증 성공 ${copied.size}개 복사본을 유지했습니다.")
+                            if (selectedTrees.isNotEmpty()) scanSelectedFolders()
+                        }
+                        .setPositiveButton("검증 성공 원본 삭제") { _, _ ->
+                            var deleted = 0
+                            copied.forEach { (src, dst) ->
+                                val ok = try { DocumentFile.fromSingleUri(this, src.uri)?.delete() == true } catch (_: Exception) { false }
+                                if (ok) { deleted++; recordOperation("분류 일괄 이동", src.relativePath, dst.uri.toString()) }
+                            }
+                            toast("원본 삭제 ${deleted}/${copied.size}개 · 나머지는 원본도 유지했습니다.")
+                            if (selectedTrees.isNotEmpty()) scanSelectedFolders()
+                        }.show()
+                }
+            }
+        }
     }
 
     private fun copyThenOfferMove(entry: Entry, destinationUri: Uri) {
