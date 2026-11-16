@@ -82,6 +82,7 @@ class DesktopStudioActivity : Activity() {
         heading = TextView(this).apply { textSize=12f; setTextColor(0xff83eaff.toInt()); typeface=Typeface.DEFAULT_BOLD }
         bar.addView(heading,LinearLayout.LayoutParams(0,dp(44),1f))
         bar.addView(button("＋ 위젯"){ addMenu() })
+        bar.addView(button("앱 위젯"){ startActivity(Intent(this, AndroidWidgetHostActivity::class.java)) })
         bar.addView(button("배경"){ pickWallpaper() })
         bar.addView(button("AI 분석"){ pickAndAnalyze() })
         bar.addView(button("저장"){ save(); toast("배치 저장 완료") })
