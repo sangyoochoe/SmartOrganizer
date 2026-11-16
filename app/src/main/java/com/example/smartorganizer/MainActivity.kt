@@ -437,7 +437,7 @@ class MainActivity : Activity() {
 
 
     private fun chooseMoveDestination(entry: Entry) {
-        val path = entry.relativePath.replace('\\\\', '/')
+        val path = entry.relativePath.replace('\\', '/')
         val first = path.substringBefore('/')
         val protected = first.equals("Android", true) ||
             listOf("system", "vendor", "product", "apex", "data", "obb").any { first.equals(it, true) } ||
