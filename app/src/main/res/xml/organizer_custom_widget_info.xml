@@ -8,4 +8,4 @@
     android:initialLayout="@layout/organizer_custom_widget"
     android:resizeMode="horizontal|vertical"
     android:widgetCategory="home_screen"
-    android:description="@string/app_name" />
+    android:description="Smart Organizer custom widget" />
