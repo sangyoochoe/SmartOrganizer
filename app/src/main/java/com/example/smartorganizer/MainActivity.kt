@@ -390,7 +390,7 @@ class MainActivity : Activity() {
     }
 
     private fun isProtectedPath(entry: Entry): Boolean {
-        val parts = entry.relativePath.replace('\\\\', '/').split('/')
+        val parts = entry.relativePath.replace('\\', '/').split('/')
         val first = parts.firstOrNull()?.trim().orEmpty()
         return first.equals("Android", true) ||
             listOf("system", "vendor", "product", "apex", "data", "obb").any { first.equals(it, true) } ||
