@@ -49,6 +49,7 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         restoreSelectedTrees()
+        restoreLooseFiles()
         buildUi()
         updateFolderSelectionUi()
     }
@@ -147,6 +148,7 @@ class MainActivity : Activity() {
             addView(bulkDeleteButton)
             addView(fullStorageScanButton)
             addView(runScanButton)
+            addView(Button(this@MainActivity).apply { text = "폴더별 용량 보기"; setOnClickListener { showFolderSizeReport() } })
             addView(manageFoldersButton)
             addView(duplicateButton)
             addView(insightButton)
@@ -236,18 +238,14 @@ class MainActivity : Activity() {
             .putStringSet("uris", selectedTrees.keys.toSet()).apply()
     }
 
-    private fun restoreLooseFiles() {\n        val saved = getSharedPreferences("scan_folders", MODE_PRIVATE).getStringSet("loose_files", emptySet()) ?: emptySet()\n        saved.forEach { value ->\n            val uri = Uri.parse(value)\n            val permission = contentResolver.persistedUriPermissions.firstOrNull { it.uri == uri && it.isReadPermission }\n            if (permission != null) selectedLooseFiles[value] = uri\n        }\n    }\n\n    private fun restoreSelectedTrees() {
-        val saved = getSharedPreferences("scan_folders", MODE_PRIVATE)
-            .getStringSet("uris", emptySet()) ?: emptySet()
+    private fun restoreLooseFiles() {
+        val saved = getSharedPreferences("scan_folders", MODE_PRIVATE).getStringSet("loose_files", emptySet()) ?: emptySet()
         saved.forEach { value ->
             val uri = Uri.parse(value)
-            val permission = contentResolver.persistedUriPermissions
-                .firstOrNull { it.uri == uri && it.isReadPermission }
-            if (permission != null) selectedTrees[value] = uri
+            val permission = contentResolver.persistedUriPermissions.firstOrNull { it.uri == uri && it.isReadPermission }
+            if (permission != null) selectedLooseFiles[value] = uri
         }
-    }
-
-    private fun updateFolderSelectionUi() {
+    }    private fun updateFolderSelectionUi() {
         runScanButton.text = "선택한 폴더 모두 스캔 (${selectedTrees.size}개)"
         runScanButton.isEnabled = selectedTrees.isNotEmpty()
         manageFoldersButton.isEnabled = true
@@ -268,87 +266,80 @@ class MainActivity : Activity() {
 
     private fun scanSelectedFolders() {
         val roots = selectedTrees.values.toList()
-        if (roots.isEmpty() && selectedLooseFiles.isEmpty()) { toast("폴더 또는 개별 파일을 추가하세요."); return }
-        setBusy(true, "선택한 폴더 ${roots.size}개와 하위 폴더를 스캔 중입니다…")
+        val loose = selectedLooseFiles.values.toList()
+        if (roots.isEmpty() && loose.isEmpty()) { toast("폴더 또는 개별 파일을 추가하세요."); return }
+        setBusy(true, "전체 폴더와 하위 폴더를 검사 중입니다…")
         worker.execute {
             val found = mutableListOf<Entry>()
             var inaccessible = 0
+            var truncated = false
+            val seen = hashSetOf<String>()
+            val queue = java.util.ArrayDeque<Pair<DocumentFile, String>>()
             roots.forEachIndexed { index, treeUri ->
-                val root = DocumentFile.fromTreeUri(this, treeUri)
-                val rootName = root?.name ?: "폴더 ${index + 1}"
-                fun walk(dir: DocumentFile, parent: String) {
-                    val children = try { dir.listFiles() } catch (_: Exception) { inaccessible++; emptyArray() }
-                    for (child in children) {
-                        val name = child.name ?: "(이름 없음)"
-                        val path = if (parent.isEmpty()) "$rootName/$name" else "$rootName/$parent/$name"
-                        val isDir = child.isDirectory
-                        found.add(Entry(name, path, if (child.isFile) child.length() else 0L, child.lastModified(), child.uri, isDir))
-                        if (isDir) walk(child, if (parent.isEmpty()) name else "$parent/$name")
-                    }
+                val root = try { DocumentFile.fromTreeUri(this, treeUri) } catch (_: Exception) { null }
+                if (root == null) inaccessible++ else {
+                    val rootName = root.name ?: "폴더 ${index + 1}"
+                    queue.add(root to rootName)
                 }
-                if (root != null) walk(root, "") else inaccessible++
+            }
+            while (queue.isNotEmpty() && !truncated) {
+                val (dir, parentPath) = queue.removeFirst()
+                val children = try { dir.listFiles() } catch (_: Exception) { inaccessible++; emptyArray() }
+                for (child in children) {
+                    if (found.size >= MAX_SCAN_ENTRIES) { truncated = true; break }
+                    val uriKey = child.uri.toString()
+                    if (!seen.add(uriKey)) continue
+                    val name = child.name ?: "(이름 없음)"
+                    val path = "$parentPath/$name"
+                    val isDir = child.isDirectory
+                    found.add(Entry(name, path, if (child.isFile) child.length().coerceAtLeast(0L) else 0L, child.lastModified(), child.uri, isDir))
+                    if (isDir) queue.add(child to path)
+                }
+            }
+            loose.forEach { uri ->
+                if (found.size >= MAX_SCAN_ENTRIES) truncated = true
+                else if (seen.add(uri.toString())) {
+                    try {
+                        val doc = DocumentFile.fromSingleUri(this, uri)
+                        if (doc != null) found.add(Entry(doc.name ?: "개별 파일", doc.name ?: "개별 파일", doc.length().coerceAtLeast(0L), doc.lastModified(), uri, false))
+                        else inaccessible++
+                    } catch (_: Exception) { inaccessible++ }
+                }
             }
             runOnUiThread {
-                entries.clear(); entries.addAll(found.distinctBy { it.uri.toString() })
+                entries.clear()
+                entries.addAll(found)
                 val files = entries.filter { !it.directory }
-                summary.text = "전체 스캔 완료: 선택 폴더 ${roots.size}개 · 개별 파일 ${selectedLooseFiles.size}개 · 파일 ${files.size}개 · 하위 폴더 ${entries.count { it.directory }}개 · ${humanSize(files.sumOf { it.size })}" + (if (inaccessible > 0) "\n일부 위치는 Android 권한 제한으로 읽지 못했습니다." else "") + (if (truncated) "\n안전 제한: ${MAX_SCAN_ENTRIES}개 항목까지만 검사했습니다." else "")
-                duplicateButton.isEnabled = files.isNotEmpty(); insightButton.isEnabled = files.isNotEmpty(); apkButton.isEnabled = files.isNotEmpty()
+                summary.text = "전체 스캔 완료: 폴더 ${roots.size}개 · 개별 파일 ${loose.size}개 · 파일 ${files.size}개 · 하위 폴더 ${entries.count { it.directory }}개 · ${humanSize(files.sumOf { it.size })}" +
+                    (if (inaccessible > 0) "\n일부 위치는 권한 제한 또는 읽기 오류로 제외되었습니다($inaccessible곳)." else "") +
+                    (if (truncated) "\n안전 제한: ${MAX_SCAN_ENTRIES}개 항목까지만 검사했습니다." else "")
+                duplicateButton.isEnabled = files.isNotEmpty()
+                insightButton.isEnabled = files.isNotEmpty()
+                apkButton.isEnabled = files.isNotEmpty()
                 archiveButton.isEnabled = files.any { it.name.endsWith(".zip", true) }
-                renderEntries(entries); setBusy(false)
-            }
-        }
-    }
-
-    private fun showFolderSizeReport() {\n        val files = entries.filter { !it.directory }\n        val totals = linkedMapOf<String, Long>()\n        files.forEach { file ->\n            val parts = file.relativePath.split("/")\n            if (parts.size > 1) {\n                for (i in 1 until parts.size) {\n                    val folder = parts.take(i).joinToString("/")\n                    totals[folder] = (totals[folder] ?: 0L) + file.size\n                }\n            }\n        }\n        results.removeAllViews()\n        addLine("폴더별 사용 용량", true)\n        if (totals.isEmpty()) addLine("집계할 폴더가 없습니다.")\n        totals.entries.sortedByDescending { it.value }.take(500).forEach { (folder, size) -> addLine("📁 $folder · ${humanSize(size)}") }\n        summary.text = "폴더별 용량 집계 완료 · 검사된 파일 ${files.size}개 기준"\n    }\n\n    private fun showOrganizationInsights() {
-        val snapshot = entries.filter { !it.directory }
-        setBusy(true, "대용량·오래된 파일·이름 중복 후보를 계산 중입니다…")
-        worker.execute {
-            val now = System.currentTimeMillis()
-            val large = snapshot.filter { it.size >= LARGE_FILE_BYTES }.sortedByDescending { it.size }
-            val old = snapshot.filter { it.modified > 0L && now - it.modified >= OLD_FILE_AGE }
-                .sortedBy { it.modified }
-            val sameNames = snapshot.groupBy { it.name.lowercase() }.values.filter { it.size > 1 }
-            val apk = snapshot.filter { it.name.endsWith(".apk", true) }
-            fun category(entry: Entry): String {
-                val ext = entry.name.substringAfterLast('.', "").lowercase()
-                return when (ext) {
-                    "jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp" -> "사진"
-                    "mp4", "mkv", "mov", "avi", "webm", "3gp" -> "동영상"
-                    "mp3", "m4a", "wav", "flac", "aac", "ogg" -> "음악·오디오"
-                    "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "hwp", "hwpx" -> "문서"
-                    "zip", "7z", "rar", "tar", "gz" -> "압축파일"
-                    "apk", "xapk", "apks" -> "설치파일"
-                    else -> "기타"
-                }
-            }
-            val categories = snapshot.groupBy { category(it) }
-            runOnUiThread {
-                results.removeAllViews()
-                addLine("정리 후보 분석 결과", true)
-                addLine("파일 종류별 분류", true)
-                categories.toSortedMap().forEach { (name, files) ->
-                    val total = files.sumOf { it.size }
-                    addLine("$name: ${files.size}개 · ${humanSize(total)}")
-                }
-                addLine("대용량 파일 (100MB 이상): ${large.size}개")
-                large.take(100).forEach { addEntryLine(it) }
-                addLine("오래된 파일 (180일 이상): ${old.size}개", true)
-                old.take(100).forEach { addEntryLine(it) }
-                addLine("이름이 같은 파일 그룹: ${sameNames.size}개", true)
-                sameNames.take(100).forEachIndexed { i, group ->
-                    addLine("그룹 ${i + 1}")
-                    group.forEach { addEntryLine(it) }
-                }
-                addLine("APK 파일: ${apk.size}개", true)
-                apk.forEach { addEntryLine(it) }
-                addLine("주의: 오래됨·이름 중복은 삭제 근거가 아닙니다. 항목을 눌러 개별 작업을 선택하세요.")
-                summary.text = "정리 후보 분석 완료 · 아무 파일도 자동 변경하거나 삭제하지 않았습니다."
+                renderEntries(entries)
                 setBusy(false)
             }
         }
     }
-
-    private fun addEntryLine(entry: Entry) {
+    private fun showFolderSizeReport() {
+        val files = entries.filter { !it.directory }
+        val totals = linkedMapOf<String, Long>()
+        files.forEach { file ->
+            val parts = file.relativePath.split("/")
+            if (parts.size > 1) {
+                for (i in 1 until parts.size) {
+                    val folder = parts.take(i).joinToString("/")
+                    totals[folder] = (totals[folder] ?: 0L) + file.size
+                }
+            }
+        }
+        results.removeAllViews()
+        addLine("폴더별 사용 용량", true)
+        if (totals.isEmpty()) addLine("집계할 폴더가 없습니다.")
+        totals.entries.sortedByDescending { it.value }.take(500).forEach { (folder, size) -> addLine("📁 $folder · ${humanSize(size)}") }
+        summary.text = "폴더별 용량 집계 완료 · 검사된 파일 ${files.size}개 기준"
+    }    private fun addEntryLine(entry: Entry) {
         val line = TextView(this).apply {
             text = "• ${entry.relativePath} · ${humanSize(entry.size)}"
             textSize = 13f
