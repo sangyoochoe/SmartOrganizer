@@ -458,6 +458,15 @@ class MainActivity : Activity() {
         if (destination == null || !destination.isDirectory || !destination.canWrite()) {
             toast("선택한 목적지에 쓸 수 없습니다."); return
         }
+        val destinationName = (destination.name ?: "").trim()
+        val blockedDestinationNames = setOf("android", "data", "obb", "system", "vendor", "product", "apex", "windows", "program files")
+        if (destinationName.lowercase(java.util.Locale.ROOT) in blockedDestinationNames) {
+            toast("시스템·앱 데이터로 오인될 수 있는 목적지라 이동을 차단했습니다."); return
+        }
+        val destinationPath = try { Uri.decode(destinationUri.toString()).lowercase(java.util.Locale.ROOT) } catch (_: Exception) { "" }
+        if (listOf("/android/data", "/android/obb", "/system/", "/vendor/", "/product/", "/apex/").any { destinationPath.contains(it) }) {
+            toast("보호 영역으로 판단되는 목적지라 이동을 차단했습니다."); return
+        }
         if (entry.name.isBlank() || entry.name == "." || entry.name == ".." || entry.name.contains('/')) {
             toast("안전하지 않은 파일 이름이어서 이동을 취소했습니다."); return
         }
@@ -523,9 +532,21 @@ class MainActivity : Activity() {
             }.show()
     }
 
+    private fun signerSha256(info: android.content.pm.PackageInfo): List<String> {
+        if (android.os.Build.VERSION.SDK_INT < 28) return emptyList()
+        return try {
+            val signing = info.signingInfo ?: return emptyList()
+            val signers = if (signing.hasMultipleSigners()) signing.apkContentsSigners else signing.signingCertificateHistory
+            signers.map { cert ->
+                MessageDigest.getInstance("SHA-256").digest(cert.toByteArray())
+                    .joinToString(":") { "%02X".format(it) }
+            }.sorted()
+        } catch (_: Exception) { emptyList() }
+    }
+
     private fun inspectApks() {
         val apks = entries.filter { !it.directory && it.name.endsWith(".apk", true) }
-        setBusy(true, "APK 파일을 임시 사본으로 읽어 패키지·버전·요청 권한을 확인 중입니다…")
+        setBusy(true, "APK 서명 지문·권한·설치 앱 버전을 대조 중입니다…")
         worker.execute {
             val reports = mutableListOf<String>()
             for (entry in apks) {
@@ -534,10 +555,22 @@ class MainActivity : Activity() {
                     val tempFile = File.createTempFile("apk-inspect-", ".apk", cacheDir)
                     temp = tempFile
                     contentResolver.openInputStream(entry.uri)?.use { input ->
-                        tempFile.outputStream().use { output -> input.copyTo(output) }
+                        tempFile.outputStream().use { output ->
+                            val buffer = ByteArray(64 * 1024)
+                            var total = 0L
+                            while (true) {
+                                val n = input.read(buffer)
+                                if (n < 0) break
+                                total += n
+                                if (total > 1024L * 1024L * 1024L) throw IllegalStateException("APK가 1GB 검사 한도를 초과했습니다.")
+                                output.write(buffer, 0, n)
+                            }
+                        }
                     } ?: throw IllegalStateException("파일을 열 수 없음")
+                    val flags = PackageManager.GET_PERMISSIONS or
+                        (if (android.os.Build.VERSION.SDK_INT >= 28) PackageManager.GET_SIGNING_CERTIFICATES else 0)
                     @Suppress("DEPRECATION")
-                    val info = packageManager.getPackageArchiveInfo(tempFile.absolutePath, PackageManager.GET_PERMISSIONS)
+                    val info = packageManager.getPackageArchiveInfo(tempFile.absolutePath, flags)
                         ?: throw IllegalArgumentException("APK 매니페스트를 읽을 수 없음")
                     val label = try {
                         info.applicationInfo?.let { archiveApp ->
@@ -547,24 +580,52 @@ class MainActivity : Activity() {
                         } ?: entry.name
                     } catch (_: Exception) { entry.name }
                     val requested = info.requestedPermissions?.toList() ?: emptyList()
+                    val dangerous = requested.filter { permission ->
+                        try {
+                            packageManager.getPermissionInfo(permission, 0).protectionLevel and
+                                android.content.pm.PermissionInfo.PROTECTION_MASK_BASE ==
+                                android.content.pm.PermissionInfo.PROTECTION_DANGEROUS
+                        } catch (_: Exception) { false }
+                    }
                     val sensitive = requested.filter { permission ->
-                        permission.contains("SMS") || permission.contains("CONTACTS") ||
-                                permission.contains("RECORD_AUDIO") || permission.contains("CAMERA") ||
-                                permission.contains("LOCATION") || permission.contains("ACCESSIBILITY") ||
-                                permission.contains("INSTALL_PACKAGES") || permission.contains("QUERY_ALL_PACKAGES") ||
-                                permission.contains("SYSTEM_ALERT_WINDOW")
+                        listOf("SMS", "CONTACTS", "RECORD_AUDIO", "CAMERA", "LOCATION",
+                            "ACCESSIBILITY", "INSTALL_PACKAGES", "QUERY_ALL_PACKAGES",
+                            "SYSTEM_ALERT_WINDOW", "READ_CALL_LOG", "WRITE_CALL_LOG",
+                            "READ_PHONE_STATE", "BODY_SENSORS").any { permission.contains(it) }
+                    }
+                    val installed = try {
+                        @Suppress("DEPRECATION")
+                        packageManager.getPackageInfo(info.packageName, 0)
+                    } catch (_: Exception) { null }
+                    val archiveSigners = signerSha256(info)
+                    val installedSigners = installed?.let { signerSha256(it) } ?: emptyList()
+                    val signatureResult = when {
+                        installed == null -> "동일 패키지 설치 앱 없음"
+                        archiveSigners.isEmpty() || installedSigners.isEmpty() -> "서명 비교 불가 (지원/API 제한)"
+                        archiveSigners == installedSigners -> "설치 앱과 서명 지문 일치"
+                        else -> "주의: 설치 앱과 서명 지문 불일치"
+                    }
+                    val versionResult = when {
+                        installed == null -> "설치 버전 비교 대상 없음"
+                        info.longVersionCode == installed.longVersionCode -> "설치 버전과 동일"
+                        info.longVersionCode > installed.longVersionCode -> "설치 버전보다 높은 APK 버전"
+                        else -> "설치 버전보다 낮은 APK 버전"
                     }
                     reports.add(buildString {
-                        append("APK: ${entry.relativePath}\n")
-                        append("앱 이름: $label\n패키지: ${info.packageName}\n")
-                        append("버전명: ${info.versionName ?: "알 수 없음"} · 버전코드: ${info.longVersionCode}\n")
-                        append("요청 권한: ${requested.size}개\n")
-                        if (sensitive.isEmpty()) append("주의 권한으로 분류한 항목 없음\n")
-                        else {
-                            append("검토할 권한 (${sensitive.size}개):\n")
+                        append("APK: ${entry.relativePath}\n앱 이름: $label\n패키지: ${info.packageName}\n")
+                        append("APK 버전: ${info.versionName ?: "알 수 없음"} (${info.longVersionCode})\n")
+                        append("설치 상태: ${if (installed == null) "미설치" else "동일 패키지 설치됨"} · $versionResult\n")
+                        append("서명 대조: $signatureResult\n")
+                        if (archiveSigners.isNotEmpty()) append("APK 인증서 SHA-256: ${archiveSigners.joinToString("; ")}\n")
+                        append("요청 권한: ${requested.size}개 · Android 위험 권한으로 확인된 항목: ${dangerous.size}개\n")
+                        dangerous.take(30).forEach { append("  • 위험 권한: $it\n") }
+                        if (sensitive.isNotEmpty()) {
+                            append("추가 검토 권한 패턴 (${sensitive.size}개):\n")
                             sensitive.forEach { append("  • $it\n") }
                         }
-                        append("평가: 권한은 기능상 필요할 수도 있으며, 이 결과만으로 악성 여부를 판정하지 않습니다.")
+                        if (installed != null && archiveSigners.isNotEmpty() && installedSigners.isNotEmpty() && archiveSigners != installedSigners)
+                            append("경고: 같은 패키지명이라도 서명이 다르면 다른 배포자 또는 변조 가능성이 있습니다. 설치/덮어쓰기를 진행하지 마세요.\n")
+                        append("판정 한계: 서명·버전·권한 메타데이터만 검사합니다. 코드 동작, 취약점, 악성 행위는 검사하지 않으며 안전 인증이 아닙니다.")
                     })
                 } catch (e: Exception) {
                     reports.add("APK: ${entry.relativePath}\n분석 불가: ${e.message ?: "읽기 오류"}")
@@ -574,10 +635,10 @@ class MainActivity : Activity() {
                 results.removeAllViews()
                 if (reports.isEmpty()) addLine("선택 폴더에서 APK 파일을 찾지 못했습니다.")
                 reports.forEachIndexed { i, report ->
-                    addLine("APK 분석 ${i + 1}", true)
+                    addLine("APK 보안 점검 ${i + 1}", true)
                     addLine(report)
                 }
-                summary.text = "APK 메타데이터 검사 완료 · 정적 권한 점검이며 백신 검사나 악성코드 확정 판정은 아닙니다."
+                summary.text = "APK 서명·버전·위험 권한 대조 완료 · 악성코드 백신 검사나 안전 인증은 아닙니다."
                 setBusy(false)
             }
         }
@@ -756,8 +817,15 @@ class MainActivity : Activity() {
             val version = packageManager.getPackageInfo(packageName, 0).versionName ?: "알 수 없음"
             val custom = getSharedPreferences("app_categories", MODE_PRIVATE).getString(packageName, "자동 분류")
             AlertDialog.Builder(this).setTitle(label)
-                .setMessage("패키지: $packageName\n버전: $version\n분류: $custom\n시스템 앱 여부: ${if (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM != 0) "시스템 앱" else "사용자 설치 앱"}")
-                .setPositiveButton("확인", null).setNeutralButton("분류 변경") { _, _ -> editAppCategory(label, packageName) }.show()
+                .setMessage("패키지: $packageName\n버전: $version\n분류: $custom\n시스템 앱 여부: ${if (info.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM != 0) "시스템 앱" else "사용자 설치 앱"}\n\n앱 권한과 저장공간 사용량은 Android 설정에서 실제 상태를 확인하세요.")
+                .setPositiveButton("앱 정보·권한 열기") { _, _ ->
+                    try {
+                        startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                            Uri.parse("package:$packageName")))
+                    } catch (_: Exception) { toast("Android 앱 정보 화면을 열 수 없습니다.") }
+                }
+                .setNeutralButton("분류 변경") { _, _ -> editAppCategory(label, packageName) }
+                .setNegativeButton("닫기", null).show()
         } catch (e: Exception) { toast("앱 정보를 읽지 못했습니다: ${e.message}") }
     }
 
