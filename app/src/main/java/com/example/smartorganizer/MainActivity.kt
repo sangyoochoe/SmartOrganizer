@@ -33,6 +33,7 @@ class MainActivity : Activity() {
     private lateinit var results: LinearLayout
     private lateinit var scanButton: Button
     private lateinit var runScanButton: Button
+    private lateinit var fullStorageScanButton: Button
     private lateinit var manageFoldersButton: Button
     private lateinit var addFilesButton: Button
     private lateinit var bulkDeleteButton: Button
@@ -75,6 +76,10 @@ class MainActivity : Activity() {
             text = "＋ 스캔할 폴더 추가"
             setOnClickListener { chooseFolder() }
             setOnLongClickListener { showSelectedFolders(); true }
+        }
+        fullStorageScanButton = Button(this).apply {
+            text = "전체 저장소 검사 (내부 저장소 선택)"
+            setOnClickListener { chooseFullStorageRoot() }
         }
         runScanButton = Button(this).apply {
             text = "선택한 폴더 모두 스캔 (0개)"
@@ -140,6 +145,7 @@ class MainActivity : Activity() {
             addView(scanButton)
             addView(addFilesButton)
             addView(bulkDeleteButton)
+            addView(fullStorageScanButton)
             addView(runScanButton)
             addView(manageFoldersButton)
             addView(duplicateButton)
@@ -170,13 +176,22 @@ class MainActivity : Activity() {
         setContentView(ScrollView(this).apply { isFillViewport = true; addView(outer) })
     }
 
-    private fun chooseFolder() {
+    private fun chooseFullStorageRoot() {
+        AlertDialog.Builder(this)
+            .setTitle("전체 저장소 검사")
+            .setMessage("다음 화면에서 ‘내부 저장소’ 최상위 폴더를 선택하면 접근이 허용된 하위 폴더를 재귀 검사합니다. Android 보호 영역(예: Android/data)은 제외될 수 있습니다.")
+            .setNegativeButton("취소", null)
+            .setPositiveButton("저장소 선택") { _, _ -> chooseFolder(REQUEST_FULL_TREE) }
+            .show()
+    }
+
+    private fun chooseFolder(requestCode: Int = REQUEST_TREE) {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or
                     Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
                     Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
         }
-        startActivityForResult(intent, REQUEST_TREE)
+        startActivityForResult(intent, requestCode)
     }
 
     @Deprecated("Deprecated API retained for compatibility")
@@ -196,7 +211,7 @@ class MainActivity : Activity() {
             updateFolderSelectionUi()
             return
         }
-        if (requestCode != REQUEST_TREE) return
+        if (requestCode != REQUEST_TREE && requestCode != REQUEST_FULL_TREE) return
         val uri = data?.data ?: return
         val flags = data.flags and
                 (Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
@@ -221,7 +236,7 @@ class MainActivity : Activity() {
             .putStringSet("uris", selectedTrees.keys.toSet()).apply()
     }
 
-    private fun restoreSelectedTrees() {
+    private fun restoreLooseFiles() {\n        val saved = getSharedPreferences("scan_folders", MODE_PRIVATE).getStringSet("loose_files", emptySet()) ?: emptySet()\n        saved.forEach { value ->\n            val uri = Uri.parse(value)\n            val permission = contentResolver.persistedUriPermissions.firstOrNull { it.uri == uri && it.isReadPermission }\n            if (permission != null) selectedLooseFiles[value] = uri\n        }\n    }\n\n    private fun restoreSelectedTrees() {
         val saved = getSharedPreferences("scan_folders", MODE_PRIVATE)
             .getStringSet("uris", emptySet()) ?: emptySet()
         saved.forEach { value ->
@@ -276,7 +291,7 @@ class MainActivity : Activity() {
             runOnUiThread {
                 entries.clear(); entries.addAll(found.distinctBy { it.uri.toString() })
                 val files = entries.filter { !it.directory }
-                summary.text = "전체 스캔 완료: 선택 폴더 ${roots.size}개 · 개별 파일 ${selectedLooseFiles.size}개 · 파일 ${files.size}개 · 하위 폴더 ${entries.count { it.directory }}개 · ${humanSize(files.sumOf { it.size })}" + if (inaccessible > 0) "\n일부 위치는 Android 권한 제한으로 읽지 못했습니다." else ""
+                summary.text = "전체 스캔 완료: 선택 폴더 ${roots.size}개 · 개별 파일 ${selectedLooseFiles.size}개 · 파일 ${files.size}개 · 하위 폴더 ${entries.count { it.directory }}개 · ${humanSize(files.sumOf { it.size })}" + (if (inaccessible > 0) "\n일부 위치는 Android 권한 제한으로 읽지 못했습니다." else "") + (if (truncated) "\n안전 제한: ${MAX_SCAN_ENTRIES}개 항목까지만 검사했습니다." else "")
                 duplicateButton.isEnabled = files.isNotEmpty(); insightButton.isEnabled = files.isNotEmpty(); apkButton.isEnabled = files.isNotEmpty()
                 archiveButton.isEnabled = files.any { it.name.endsWith(".zip", true) }
                 renderEntries(entries); setBusy(false)
@@ -284,7 +299,7 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun showOrganizationInsights() {
+    private fun showFolderSizeReport() {\n        val files = entries.filter { !it.directory }\n        val totals = linkedMapOf<String, Long>()\n        files.forEach { file ->\n            val parts = file.relativePath.split("/")\n            if (parts.size > 1) {\n                for (i in 1 until parts.size) {\n                    val folder = parts.take(i).joinToString("/")\n                    totals[folder] = (totals[folder] ?: 0L) + file.size\n                }\n            }\n        }\n        results.removeAllViews()\n        addLine("폴더별 사용 용량", true)\n        if (totals.isEmpty()) addLine("집계할 폴더가 없습니다.")\n        totals.entries.sortedByDescending { it.value }.take(500).forEach { (folder, size) -> addLine("📁 $folder · ${humanSize(size)}") }\n        summary.text = "폴더별 용량 집계 완료 · 검사된 파일 ${files.size}개 기준"\n    }\n\n    private fun showOrganizationInsights() {
         val snapshot = entries.filter { !it.directory }
         setBusy(true, "대용량·오래된 파일·이름 중복 후보를 계산 중입니다…")
         worker.execute {
@@ -734,7 +749,7 @@ class MainActivity : Activity() {
 
     companion object {
         private const val REQUEST_TREE = 7101
-        private const val REQUEST_FILES = 7102
+        private const val REQUEST_FILES = 7102\n        private const val REQUEST_FULL_TREE = 7103\n        private const val MAX_SCAN_ENTRIES = 100000
         private const val LARGE_FILE_BYTES = 100L * 1024L * 1024L
         private const val OLD_FILE_AGE = 180L * 24L * 60L * 60L * 1000L
         private val ARCHIVE_SCRIPT_EXTENSIONS = listOf(".sh", ".bat", ".cmd", ".ps1", ".js", ".vbs", ".py", ".jar")
