@@ -595,12 +595,10 @@ class MainActivity : Activity() {
 
 
     private fun chooseMoveDestination(entry: Entry) {
-        val path = entry.relativePath.replace('\\', '/')
-        val first = path.substringBefore('/')
-        val protected = first.equals("Android", true) ||
-            listOf("system", "vendor", "product", "apex", "data", "obb").any { first.equals(it, true) } ||
-            path.split('/').any { it == ".." }
-        if (protected) { toast("시스템·앱 데이터 보호 경로로 판단되어 이동을 차단했습니다."); return }
+        if (isProtectedPath(entry)) {
+            toast("경로 중간에 시스템·앱 데이터 보호 폴더가 있어 이동을 차단했습니다.")
+            return
+        }
         if (listOf(".apk", ".apks", ".aab", ".dex", ".so").any { entry.name.endsWith(it, true) }) {
             toast("설치·실행 관련 파일은 자동 재분류 이동 대상에서 제외합니다."); return
         }
@@ -768,6 +766,10 @@ class MainActivity : Activity() {
     }
 
     private fun confirmDelete(entry: Entry) {
+        if (getSharedPreferences("quick_actions", MODE_PRIVATE).getBoolean("safe_mode", false)) {
+            toast("안전 정리 모드가 켜져 있어 개별 삭제도 차단되었습니다.")
+            return
+        }
         AlertDialog.Builder(this)
             .setTitle("파일 삭제 확인")
             .setMessage("${entry.relativePath}\n\n이 파일을 삭제할까요? 이 작업은 되돌릴 수 없을 수 있습니다.")
