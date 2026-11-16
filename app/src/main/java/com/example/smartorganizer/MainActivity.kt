@@ -532,7 +532,7 @@ class MainActivity : Activity() {
     }
 
     private fun scanExactDuplicates() {
-        if (selectedTrees.isEmpty()) return
+        if (entries.none { !it.directory }) return
         val snapshot = entries.toList()
         setBusy(true, "크기가 같은 파일 후보를 SHA-256으로 비교 중입니다…")
         worker.execute {
@@ -717,6 +717,7 @@ class MainActivity : Activity() {
     private fun setBusy(busy: Boolean, message: String? = null) {
         if (message != null) summary.text = message
         scanButton.isEnabled = !busy
+        fullStorageScanButton.isEnabled = !busy
         runScanButton.isEnabled = !busy && (selectedTrees.isNotEmpty() || selectedLooseFiles.isNotEmpty())
         addFilesButton.isEnabled = !busy
         bulkDeleteButton.isEnabled = !busy && checkedEntries.isNotEmpty()
