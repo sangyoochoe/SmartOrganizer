@@ -26,7 +26,7 @@
         <activity
             android:name=".LauncherActivity"
             android:exported="true"
-            android:label="Smart Organizer Home">
+            android:label="스마트 정리함 홈">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.HOME"/>
