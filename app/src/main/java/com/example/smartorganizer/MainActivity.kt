@@ -198,12 +198,12 @@ class MainActivity : Activity() {
             addView(desktopStudioButton)
             addView(widgetStudioButton)
         }
-        val scroll = ScrollView(this)
+        // One single scroll container for the entire page. A nested fixed-height
+        // ScrollView here used to trap touch gestures and hide the file results.
         results = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, 8, 0, 8)
         }
-        scroll.addView(results)
         // Consistent branded controls and section dividers.
         for (index in 0 until actions.childCount) {
             val child = actions.getChildAt(index)
@@ -235,10 +235,12 @@ class MainActivity : Activity() {
         outer.addView(subtitle)
         outer.addView(summary)
         outer.addView(actions)
-        outer.addView(scroll, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, (280 * resources.displayMetrics.density).toInt()
-        ))
-        setContentView(ScrollView(this).apply { isFillViewport = true; addView(outer) })
+        outer.addView(results)
+        setContentView(ScrollView(this).apply {
+            isFillViewport = true
+            clipToPadding = false
+            addView(outer)
+        })
     }
 
     private fun requestMediaAccessAndScan() {
