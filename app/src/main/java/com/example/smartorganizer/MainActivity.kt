@@ -83,7 +83,7 @@ class MainActivity : Activity() {
             setOnLongClickListener { showSelectedFolders(); true }
         }
         fullStorageScanButton = Button(this).apply {
-            text = "전체 저장소 검사 (내부 저장소 선택)"
+            text = "폴더 추가 방법 안내"
             setOnClickListener { chooseFullStorageRoot() }
         }
         runScanButton = Button(this).apply {
