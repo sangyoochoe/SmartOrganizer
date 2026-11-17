@@ -1,5 +1,6 @@
 <resources>
-    <string name="live_wallpaper_description">Smart Organizer 동영상 월페이퍼</string>
+    <string name="app_name">스마트 정리함</string>
+    <string name="live_wallpaper_description">스마트 정리함 동영상 월페이퍼</string>
     <string name="cyber_widget_description">사이버 포뮬러 시계·배터리·앱 바로가기 위젯</string>
-    <string name="organizer_custom_widget_description">Smart Organizer 사용자 위젯</string>
+    <string name="organizer_custom_widget_description">스마트 정리함 사용자 위젯</string>
 </resources>
