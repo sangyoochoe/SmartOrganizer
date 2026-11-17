@@ -417,11 +417,20 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun openEntryInputStream(uri: Uri): java.io.InputStream? =
-        if (uri.scheme == "file") File(uri.path ?: return null).inputStream() else contentResolver.openInputStream(uri)
+    private fun openEntryInputStream(uri: Uri): java.io.InputStream? {
+        return if (uri.scheme == "file") {
+            val path = uri.path ?: return null
+            File(path).inputStream()
+        } else contentResolver.openInputStream(uri)
+    }
 
-    private fun deleteEntry(uri: Uri): Boolean =
-        if (uri.scheme == "file") File(uri.path ?: return false).delete() else try { DocumentFile.fromSingleUri(this, uri)?.delete() == true } catch (_: Exception) { false }
+    private fun deleteEntry(uri: Uri): Boolean {
+        if (uri.scheme == "file") {
+            val path = uri.path ?: return false
+            return File(path).delete()
+        }
+        return try { DocumentFile.fromSingleUri(this, uri)?.delete() == true } catch (_: Exception) { false }
+    }
 
     private fun renameEntryUri(uri: Uri, newName: String): Boolean {
         if (uri.scheme == "file") {
