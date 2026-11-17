@@ -65,21 +65,27 @@ class MainActivity : Activity() {
     private fun buildUi() {
         val outer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(20, 20, 20, 12)
+            setPadding(18, 22, 18, 24)
+            setBackgroundColor(0xFF0B1220.toInt())
         }
         val title = TextView(this).apply {
-            text = "Smart Organizer"
-            textSize = 26f
+            text = "✦  스마트 정리함"
+            textSize = 27f
+            setTextColor(0xFFF2F7FF.toInt())
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
             setPadding(0, 0, 0, 5)
         }
         val subtitle = TextView(this).apply {
-            text = "파일 분석 · 중복 탐지 · APK 권한 점검"
-            textSize = 14f
+            text = "파일 · 미디어 · 기기 꾸미기를 한곳에서"
+            textSize = 13f
+            setTextColor(0xFF9FB2C9.toInt())
         }
         summary = TextView(this).apply {
             text = "분석할 폴더를 선택하세요. 실제 파일만 검사하며 자동 삭제하지 않습니다."
             textSize = 14f
-            setPadding(0, 14, 0, 10)
+            setTextColor(0xFFEAF4FF.toInt())
+            setPadding(16, 16, 16, 16)
+            background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 22f }
         }
         scanButton = Button(this).apply {
             text = "＋ 스캔할 폴더 추가"
@@ -198,6 +204,33 @@ class MainActivity : Activity() {
             setPadding(0, 8, 0, 8)
         }
         scroll.addView(results)
+        // Consistent branded controls and section dividers.
+        for (index in 0 until actions.childCount) {
+            val child = actions.getChildAt(index)
+            if (child is Button) {
+                child.isAllCaps = false
+                child.textSize = 14f
+                child.setTextColor(0xFFEAF4FF.toInt())
+                child.background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(if (child === mediaScanButton || child === runScanButton) 0xFF70D6E5.toInt() else 0xFF243650.toInt())
+                    cornerRadius = 16f
+                }
+                if (child === mediaScanButton || child === runScanButton) child.setTextColor(0xFF071522.toInt())
+                child.setPadding(16, 12, 16, 12)
+            }
+        }
+        fun addSectionHeader(label: String, index: Int) {
+            actions.addView(TextView(this).apply {
+                text = label
+                textSize = 16f
+                setTextColor(0xFF70D6E5.toInt())
+                typeface = android.graphics.Typeface.DEFAULT_BOLD
+                setPadding(4, 18, 4, 6)
+            }, index)
+        }
+        addSectionHeader("기기 및 홈 화면", 17)
+        addSectionHeader("분석 도구", 14)
+        addSectionHeader("파일 정리", 0)
         outer.addView(title)
         outer.addView(subtitle)
         outer.addView(summary)
