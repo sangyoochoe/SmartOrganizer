@@ -146,7 +146,7 @@ class MainActivity : Activity() {
             setOnClickListener { showOperationHistory() }
         }
         appsButton = Button(this).apply {
-            text = "설치된 앱 목록 및 분류"
+            text = "앱 분류 · 그룹 관리"
             setOnClickListener { showLaunchableApps() }
         }
         wallpaperButton = Button(this).apply {
@@ -173,8 +173,34 @@ class MainActivity : Activity() {
             text = "▦ 나만의 위젯 스튜디오"
             setOnClickListener { startActivity(Intent(this@MainActivity, WidgetStudioActivity::class.java)) }
         }
+        val helpButton = Button(this).apply {
+            text = "사용 방법 · 정리 순서"
+            setOnClickListener {
+                AlertDialog.Builder(this@MainActivity)
+                    .setTitle("스마트 정리함 사용 방법")
+                    .setMessage(
+                        "① 파일 정리\n" +
+                        "• ‘사진·동영상·음악 전체 자동 검사’를 누르면 허용한 미디어를 자동으로 불러옵니다.\n" +
+                        "• 문서·다운로드 파일은 ‘스캔할 폴더 추가’에서 Download, Documents 등을 선택한 뒤 ‘선택한 폴더 모두 스캔’을 누르세요. 추가한 폴더는 누적됩니다.\n" +
+                        "② 정리하기\n" +
+                        "• ‘정리 후보 분석’은 큰 파일·오래된 파일을 찾아 보여줍니다.\n" +
+                        "• ‘완전 중복 파일 검사’는 SHA-256으로 내용이 같은 파일을 찾습니다.\n" +
+                        "• ‘파일 유형 자동 분류’는 사진·문서·압축 파일 등으로 분류하고 이동을 제안합니다.\n" +
+                        "• 파일을 눌러 작업을 선택하고, 삭제 전에는 반드시 확인창을 읽으세요. 안전 정리 모드에서는 일괄 삭제가 차단됩니다.\n\n" +
+                        "③ 앱 묶기\n" +
+                        "• ‘앱 분류 · 그룹 관리’를 열고 앱을 누르면 앱 정보, 길게 누르면 분류명을 직접 지정할 수 있습니다.\n" +
+                        "• 현재 앱 분류는 이 앱 안의 목록을 업무·게임·사진 등으로 라벨링하는 기능입니다. One UI 홈 화면에 폴더를 자동 생성하거나 앱 아이콘을 실제로 이동시키지는 않습니다.\n\n" +
+                        "④ Fold 화면·꾸미기\n" +
+                        "• 월페이퍼, 위젯, 데스크톱 스튜디오에서 각각 배경과 위젯을 구성하세요.\n\n" +
+                        "주의: Android/data·obb 등 시스템 보호 폴더는 일반 앱이 전체 접근할 수 없습니다. 자동 검사는 접근 허용된 미디어 범위에 한합니다."
+                    )
+                    .setPositiveButton("확인", null)
+                    .show()
+            }
+        }
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            addView(helpButton)
             addView(scanButton)
             addView(mediaScanButton)
             addView(addFilesButton)
