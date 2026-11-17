@@ -201,10 +201,10 @@ class MainActivity : Activity() {
 
     private fun chooseFullStorageRoot() {
         AlertDialog.Builder(this)
-            .setTitle("전체 저장소 검사")
-            .setMessage("다음 화면에서 ‘내부 저장소’ 최상위 폴더를 선택하면 접근이 허용된 하위 폴더를 재귀 검사합니다. Android 보호 영역(예: Android/data)은 제외될 수 있습니다.")
+            .setTitle("검사할 폴더 추가")
+            .setMessage("안드로이드 정책상 내부 저장소 최상위 폴더 전체는 선택할 수 없습니다. Download, DCIM, Pictures, Documents처럼 필요한 하위 폴더를 각각 추가하세요. 추가한 폴더들은 누적되며 ‘선택 위치 스캔’에서 함께 검사합니다. Android/data·obb 등 보호 영역은 접근할 수 없습니다.")
             .setNegativeButton("취소", null)
-            .setPositiveButton("저장소 선택") { _, _ -> chooseFolder(REQUEST_FULL_TREE) }
+            .setPositiveButton("하위 폴더 선택") { _, _ -> chooseFolder(REQUEST_FULL_TREE) }
             .show()
     }
 
