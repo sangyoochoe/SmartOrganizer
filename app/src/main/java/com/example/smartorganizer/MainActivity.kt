@@ -2,7 +2,10 @@ package com.example.smartorganizer
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.Manifest
 import android.content.Intent
+import android.os.Build
+import android.provider.MediaStore
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
@@ -33,6 +36,7 @@ class MainActivity : Activity() {
     private lateinit var results: LinearLayout
     private lateinit var scanButton: Button
     private lateinit var runScanButton: Button
+    private lateinit var mediaScanButton: Button
     private lateinit var fullStorageScanButton: Button
     private lateinit var manageFoldersButton: Button
     private lateinit var addFilesButton: Button
@@ -90,6 +94,10 @@ class MainActivity : Activity() {
             text = "선택한 폴더 모두 스캔 (0개)"
             isEnabled = false
             setOnClickListener { scanSelectedFolders() }
+        }
+        mediaScanButton = Button(this).apply {
+            text = "사진·동영상·음악 전체 자동 검사"
+            setOnClickListener { requestMediaAccessAndScan() }
         }
         addFilesButton = Button(this).apply { text = "＋ 폴더 밖 개별 파일 여러 개 추가"; setOnClickListener { chooseFiles() } }
         bulkDeleteButton = Button(this).apply { text = "선택한 파일 일괄 삭제"; isEnabled = false; setOnClickListener { confirmBulkDelete() } }
@@ -162,6 +170,7 @@ class MainActivity : Activity() {
         val actions = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             addView(scanButton)
+            addView(mediaScanButton)
             addView(addFilesButton)
             addView(bulkDeleteButton)
             addView(fullStorageScanButton)
@@ -197,6 +206,94 @@ class MainActivity : Activity() {
             LinearLayout.LayoutParams.MATCH_PARENT, (280 * resources.displayMetrics.density).toInt()
         ))
         setContentView(ScrollView(this).apply { isFillViewport = true; addView(outer) })
+    }
+
+    private fun requestMediaAccessAndScan() {
+        val permissions = if (Build.VERSION.SDK_INT >= 33) arrayOf(
+            Manifest.permission.READ_MEDIA_IMAGES,
+            Manifest.permission.READ_MEDIA_VIDEO,
+            Manifest.permission.READ_MEDIA_AUDIO
+        ) else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        val missing = permissions.filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        if (missing.isEmpty()) {
+            scanMediaLibrary()
+        } else {
+            requestPermissions(missing.toTypedArray(), REQUEST_MEDIA_PERMISSION)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQUEST_MEDIA_PERMISSION) {
+            if (grantResults.isNotEmpty() && grantResults.any { it == PackageManager.PERMISSION_GRANTED }) {
+                scanMediaLibrary()
+            } else {
+                toast("미디어 접근 권한이 필요합니다. 권한을 허용하거나 폴더를 직접 추가하세요.")
+            }
+        }
+    }
+
+    private fun scanMediaLibrary() {
+        setBusy(true, "기기에서 접근 가능한 사진·동영상·음악을 검색 중입니다…")
+        worker.execute {
+            val found = mutableListOf<Entry>()
+            var inaccessible = 0
+            val collection = MediaStore.Files.getContentUri("external")
+            val projection = arrayOf(
+                MediaStore.Files.FileColumns._ID,
+                MediaStore.MediaColumns.DISPLAY_NAME,
+                MediaStore.MediaColumns.SIZE,
+                MediaStore.MediaColumns.DATE_MODIFIED,
+                MediaStore.MediaColumns.RELATIVE_PATH,
+                MediaStore.Files.FileColumns.MEDIA_TYPE
+            )
+            val selection = "${MediaStore.Files.FileColumns.MEDIA_TYPE} IN (?, ?, ?)"
+            val args = arrayOf(
+                MediaStore.Files.FileColumns.MEDIA_TYPE_IMAGE.toString(),
+                MediaStore.Files.FileColumns.MEDIA_TYPE_VIDEO.toString(),
+                MediaStore.Files.FileColumns.MEDIA_TYPE_AUDIO.toString()
+            )
+            try {
+                contentResolver.query(collection, projection, selection, args,
+                    "${MediaStore.MediaColumns.DATE_MODIFIED} DESC")?.use { cursor ->
+                    val idCol = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
+                    val nameCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DISPLAY_NAME)
+                    val sizeCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
+                    val dateCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_MODIFIED)
+                    val pathCol = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.RELATIVE_PATH)
+                    while (cursor.moveToNext() && found.size < MAX_SCAN_ENTRIES) {
+                        val id = cursor.getLong(idCol)
+                        val name = cursor.getString(nameCol) ?: "미디어 파일"
+                        val relative = cursor.getString(pathCol) ?: "미디어"
+                        val size = if (cursor.isNull(sizeCol)) 0L else cursor.getLong(sizeCol).coerceAtLeast(0L)
+                        val modified = if (cursor.isNull(dateCol)) 0L else cursor.getLong(dateCol) * 1000L
+                        val uri = android.content.ContentUris.withAppendedId(collection, id)
+                        found.add(Entry(name, relative + name, size, modified, uri, false))
+                    }
+                } ?: run { inaccessible++ }
+            } catch (_: SecurityException) {
+                inaccessible++
+            } catch (_: Exception) {
+                inaccessible++
+            }
+            runOnUiThread {
+                entries.clear()
+                entries.addAll(found)
+                checkedEntries.clear()
+                renderEntries(found)
+                setBusy(false)
+                val mediaCount = found.size
+                summary.text = "미디어 자동 검사 완료: 사진·동영상·음악 ${mediaCount}개" +
+                    if (inaccessible > 0) " · 권한 또는 접근 제한 ${inaccessible}건" else ""
+                duplicateButton.isEnabled = found.isNotEmpty()
+                insightButton.isEnabled = found.isNotEmpty()
+                classifyButton.isEnabled = found.isNotEmpty()
+                contentAuditButton.isEnabled = found.isNotEmpty()
+                apkButton.isEnabled = found.isNotEmpty()
+                archiveButton.isEnabled = found.any { it.name.endsWith(".zip", true) }
+                toast("접근 가능한 미디어 ${mediaCount}개를 찾았습니다. Android/data 등 앱 보호 폴더와 일반 문서 파일은 별도 폴더 접근이 필요합니다.")
+            }
+        }
     }
 
     private fun chooseFullStorageRoot() {
@@ -1209,6 +1306,7 @@ class MainActivity : Activity() {
     }
 
     companion object {
+        private const val REQUEST_MEDIA_PERMISSION = 7105
         private const val REQUEST_TREE = 7101
         private const val REQUEST_FILES = 7102
         private const val REQUEST_FULL_TREE = 7103
