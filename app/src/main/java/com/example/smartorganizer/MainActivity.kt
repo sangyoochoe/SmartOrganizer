@@ -7,6 +7,8 @@ import android.content.Intent
 import android.os.Build
 import android.provider.MediaStore
 import android.provider.DocumentsContract
+import android.os.Environment
+import android.provider.Settings
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
@@ -98,7 +100,7 @@ class MainActivity : Activity() {
             setOnClickListener { chooseDownloadFolder() }
         }
         fullStorageScanButton = Button(this).apply {
-            text = "폴더 추가 방법 안내"
+            text = "Download 전체 자동 검사 (모든 파일 접근)"
             setOnClickListener { chooseFullStorageRoot() }
         }
         runScanButton = Button(this).apply {
@@ -364,12 +366,69 @@ class MainActivity : Activity() {
     }
 
     private fun chooseFullStorageRoot() {
-        AlertDialog.Builder(this)
-            .setTitle("검사할 폴더 추가")
-            .setMessage("안드로이드 정책상 내부 저장소 최상위 폴더 전체는 선택할 수 없습니다. Download, DCIM, Pictures, Documents처럼 필요한 하위 폴더를 각각 추가하세요. 추가한 폴더들은 누적되며 ‘선택 위치 스캔’에서 함께 검사합니다. Android/data·obb 등 보호 영역은 접근할 수 없습니다.")
-            .setNegativeButton("취소", null)
-            .setPositiveButton("하위 폴더 선택") { _, _ -> chooseFolder(REQUEST_FULL_TREE) }
-            .show()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
+            AlertDialog.Builder(this).setTitle("Download 전체 접근 권한")
+                .setMessage("Download 폴더와 모든 하위 폴더·파일을 자동 검사하려면 Android 설정에서 ‘모든 파일 접근’을 허용해야 합니다. 권한은 파일 검사에 사용하며 자동 삭제하지 않습니다.")
+                .setNegativeButton("취소", null).setPositiveButton("설정 열기") { _, _ ->
+                    try { startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:" + packageName))) }
+                    catch (_: Exception) { startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
+                }.show()
+        } else scanDownloadWithAllFilesAccess()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::fullStorageScanButton.isInitialized && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            fullStorageScanButton.text = if (Environment.isExternalStorageManager()) "⬇ Download 전체 다시 검사 (권한 허용됨)" else "⬇ Download 전체 검사 (모든 파일 접근 권한 필요)"
+        }
+    }
+
+    private fun scanDownloadWithAllFilesAccess() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) { chooseFullStorageRoot(); return }
+        val download = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        setBusy(true, "Download 전체와 모든 하위 폴더를 검사 중입니다…")
+        worker.execute {
+            val found = mutableListOf<Entry>()
+            var inaccessible = 0
+            var truncated = false
+            val queue = java.util.ArrayDeque<File>()
+            if (download.isDirectory && download.canRead()) queue.add(download) else inaccessible++
+            while (queue.isNotEmpty() && !truncated) {
+                val dir = queue.removeFirst()
+                val children = try { dir.listFiles() ?: emptyArray() } catch (_: Exception) { inaccessible++; emptyArray() }
+                for (child in children) {
+                    if (found.size >= MAX_SCAN_ENTRIES) { truncated = true; break }
+                    val relative = child.absolutePath.removePrefix(download.absolutePath).trimStart(File.separatorChar)
+                    found.add(Entry(child.name, "Download/" + relative, if (child.isFile) child.length().coerceAtLeast(0L) else 0L, child.lastModified(), Uri.fromFile(child), child.isDirectory))
+                    if (child.isDirectory && child.canRead()) queue.add(child) else if (child.isDirectory) inaccessible++
+                }
+            }
+            runOnUiThread {
+                entries.clear(); entries.addAll(found); checkedEntries.clear()
+                val files = found.filter { !it.directory }
+                summary.text = "Download 전체 검사 완료 · 파일 " + files.size + "개 · 하위 폴더 " + found.count { it.directory } + "개 · " + humanSize(files.sumOf { it.size }) +
+                    (if (inaccessible > 0) "\n읽기 제한 위치 " + inaccessible + "곳" else "") +
+                    (if (truncated) "\n안전 제한: " + MAX_SCAN_ENTRIES + "개 항목까지만 검사했습니다." else "")
+                duplicateButton.isEnabled = files.isNotEmpty(); insightButton.isEnabled = files.isNotEmpty(); classifyButton.isEnabled = files.isNotEmpty()
+                contentAuditButton.isEnabled = files.isNotEmpty(); apkButton.isEnabled = files.isNotEmpty()
+                archiveButton.isEnabled = files.any { it.name.endsWith(".zip", true) }
+                renderEntries(found); setBusy(false); toast("Download 전체에서 " + files.size + "개 파일을 찾았습니다.")
+            }
+        }
+    }
+
+    private fun openEntryInputStream(uri: Uri): java.io.InputStream? =
+        if (uri.scheme == "file") File(uri.path ?: return null).inputStream() else openEntryInputStream(uri)
+
+    private fun deleteEntry(uri: Uri): Boolean =
+        if (uri.scheme == "file") File(uri.path ?: return false).delete() else try { DocumentFile.fromSingleUri(this, uri)?.delete() == true } catch (_: Exception) { false }
+
+    private fun renameEntryUri(uri: Uri, newName: String): Boolean {
+        if (uri.scheme == "file") {
+            val source = File(uri.path ?: return false)
+            return source.renameTo(File(source.parentFile, newName))
+        }
+        return try { DocumentFile.fromSingleUri(this, uri)?.renameTo(newName) == true } catch (_: Exception) { false }
     }
 
     private fun chooseFolder(requestCode: Int = REQUEST_TREE) {
@@ -615,7 +674,7 @@ class MainActivity : Activity() {
     private fun detectFileSignature(uri: Uri): String {
         val header = ByteArray(16)
         val count = try {
-            contentResolver.openInputStream(uri)?.use { input -> input.read(header) } ?: -1
+            openEntryInputStream(uri)?.use { input -> input.read(header) } ?: -1
         } catch (_: Exception) { -1 }
         if (count <= 0) return "읽기 불가"
         fun starts(vararg bytes: Int): Boolean =
@@ -777,8 +836,7 @@ class MainActivity : Activity() {
                 if (newName.isEmpty() || newName.contains("/") || newName == "." || newName == "..") {
                     toast("올바른 파일 이름을 입력하세요.")
                 } else {
-                    val doc = DocumentFile.fromSingleUri(this, entry.uri)
-                    val ok = try { doc?.renameTo(newName) == true } catch (_: Exception) { false }
+                    val ok = renameEntryUri(entry.uri, newName)
                     toast(if (ok) "이름을 변경했습니다. 다시 스캔해 주세요." else "이 위치에서는 이름 변경을 지원하지 않습니다.")
                     if (ok) recordOperation("이름 변경", entry.relativePath, newName)
                     if (ok) if (selectedTrees.isNotEmpty()) scanSelectedFolders()
@@ -843,7 +901,7 @@ class MainActivity : Activity() {
                     output = destination.createFile(contentResolver.getType(entry.uri) ?: "application/octet-stream", entry.name)
                         ?: throw IllegalStateException("같은 이름이 있거나 생성 불가")
                     var bytes = 0L
-                    contentResolver.openInputStream(entry.uri).use { input ->
+                    openEntryInputStream(entry.uri).use { input ->
                         if (input == null) throw IllegalStateException("원본 읽기 실패")
                         contentResolver.openOutputStream(output.uri, "w").use { out ->
                             if (out == null) throw IllegalStateException("목적지 쓰기 실패")
@@ -882,7 +940,7 @@ class MainActivity : Activity() {
                         .setPositiveButton("검증 성공 원본 삭제") { _, _ ->
                             var deleted = 0
                             copied.forEach { (src, dst) ->
-                                val ok = try { DocumentFile.fromSingleUri(this, src.uri)?.delete() == true } catch (_: Exception) { false }
+                                val ok = try { deleteEntry(src.uri) } catch (_: Exception) { false }
                                 if (ok) { deleted++; recordOperation("분류 일괄 이동", src.relativePath, dst.uri.toString()) }
                             }
                             toast("원본 삭제 ${deleted}/${copied.size}개 · 나머지는 원본도 유지했습니다.")
@@ -916,7 +974,7 @@ class MainActivity : Activity() {
         worker.execute {
             var bytes = 0L
             try {
-                contentResolver.openInputStream(entry.uri).use { input ->
+                openEntryInputStream(entry.uri).use { input ->
                     if (input == null) throw IllegalStateException("원본을 읽을 수 없습니다.")
                     contentResolver.openOutputStream(output.uri, "w").use { out ->
                         if (out == null) throw IllegalStateException("목적지에 쓸 수 없습니다.")
@@ -968,8 +1026,7 @@ class MainActivity : Activity() {
             .setMessage("${entry.relativePath}\n\n이 파일을 삭제할까요? 이 작업은 되돌릴 수 없을 수 있습니다.")
             .setNegativeButton("취소", null)
             .setPositiveButton("삭제") { _, _ ->
-                val doc = DocumentFile.fromSingleUri(this, entry.uri)
-                val ok = try { doc?.delete() == true } catch (_: Exception) { false }
+                val ok = deleteEntry(entry.uri)
                 toast(if (ok) "파일을 삭제했습니다." else "삭제할 수 없습니다. 권한 또는 위치 제한을 확인하세요.")
                 if (ok) recordOperation("삭제", entry.relativePath, "삭제 완료")
                 if (ok && selectedTrees.isNotEmpty()) scanSelectedFolders()
@@ -998,7 +1055,7 @@ class MainActivity : Activity() {
                 try {
                     val tempFile = File.createTempFile("apk-inspect-", ".apk", cacheDir)
                     temp = tempFile
-                    contentResolver.openInputStream(entry.uri)?.use { input ->
+                    openEntryInputStream(entry.uri)?.use { input ->
                         tempFile.outputStream().use { output ->
                             val buffer = ByteArray(64 * 1024)
                             var total = 0L
@@ -1103,7 +1160,7 @@ class MainActivity : Activity() {
                 var suspiciousPaths = 0
                 val samples = mutableListOf<String>()
                 try {
-                    contentResolver.openInputStream(entry.uri)?.use { raw ->
+                    openEntryInputStream(entry.uri)?.use { raw ->
                         ZipInputStream(raw.buffered()).use { zip ->
                             while (true) {
                                 val item = zip.nextEntry ?: break
@@ -1164,7 +1221,7 @@ class MainActivity : Activity() {
             for (bucket in candidates) for (entry in bucket) {
                 try {
                     val md = MessageDigest.getInstance("SHA-256")
-                    contentResolver.openInputStream(entry.uri)?.use { input ->
+                    openEntryInputStream(entry.uri)?.use { input ->
                         val buffer = ByteArray(64 * 1024)
                         while (true) {
                             val count = input.read(buffer)
@@ -1317,7 +1374,7 @@ class MainActivity : Activity() {
             .setNegativeButton("취소", null).setPositiveButton("삭제") { _, _ ->
                 var success = 0
                 chosen.forEach { entry ->
-                    val ok = try { DocumentFile.fromSingleUri(this, entry.uri)?.delete() == true } catch (_: Exception) { false }
+                    val ok = try { deleteEntry(entry.uri) } catch (_: Exception) { false }
                     if (ok) { success++; checkedEntries.remove(entry.uri.toString()); recordOperation("일괄 삭제", entry.relativePath, "삭제 완료") }
                 }
                 toast("$success/${chosen.size}개 파일을 삭제했습니다.")
