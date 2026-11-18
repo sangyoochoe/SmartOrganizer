@@ -52,6 +52,7 @@ class MainActivity : Activity() {
     private lateinit var apkButton: Button
     private lateinit var appsButton: Button
     private lateinit var archiveButton: Button
+    private lateinit var versionManagerButton: Button
     private lateinit var historyButton: Button
     private lateinit var launcherButton: Button
     private lateinit var wallpaperButton: Button
@@ -113,7 +114,7 @@ class MainActivity : Activity() {
         apkButton = Button(this).apply { text = "APK 권한 · 버전 검사"; isEnabled = false; setOnClickListener { inspectApks() } }
         archiveButton = Button(this).apply { text = "ZIP 내부 구성 검사"; isEnabled = false; setOnClickListener { inspectArchives() } }
         historyButton = Button(this).apply { text = "파일 작업 기록"; setOnClickListener { showOperationHistory() } }
-        val versionManagerButton = Button(this).apply {
+        versionManagerButton = Button(this).apply {
             text = "파일 버전 · 프로젝트 관리"
             isEnabled = false
             setOnClickListener { showVersionManager() }
