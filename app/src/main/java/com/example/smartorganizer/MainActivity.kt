@@ -951,12 +951,10 @@ class MainActivity : Activity() {
         val safe = files.filter { !isProtectedPath(it) &&
             !listOf(".apk", ".apks", ".aab", ".dex", ".so", ".jar", ".exe", ".dll").any { ext -> it.name.endsWith(ext, true) } }
         if (safe.isEmpty()) { toast("안전하게 이동할 수 있는 파일이 없습니다."); return }
-        val folderNote = groupFolderName?.let { "
-선택한 목적지 안에 ‘$it’ 폴더를 만들어 파일을 함께 넣습니다." } ?: ""
+        val folderNote = groupFolderName?.let { "\\n선택한 목적지 안에 ‘$it’ 폴더를 만들어 파일을 함께 넣습니다." } ?: ""
         AlertDialog.Builder(this)
             .setTitle(if (groupFolderName == null) "파일 일괄 이동" else "프로젝트 묶음 이동")
-            .setMessage("${safe.size}개 파일을 한 번에 복사하고 각각 크기를 검증합니다. 이름 충돌·검증 실패 파일은 건너뜁니다.$folderNote
-원본은 복사 검증 후 이동 완료를 승인할 때만 삭제합니다.")
+            .setMessage("${safe.size}개 파일을 한 번에 복사하고 각각 크기를 검증합니다. 이름 충돌·검증 실패 파일은 건너뜁니다.$folderNote\\n원본은 복사 검증 후 이동 완료를 승인할 때만 삭제합니다.")
             .setNegativeButton("취소", null)
             .setPositiveButton("이동 위치 선택") { _, _ ->
                 pendingMoveEntry = null
