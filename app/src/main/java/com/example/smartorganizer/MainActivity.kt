@@ -727,7 +727,7 @@ class MainActivity : Activity() {
             }
             if (movable.size > 1) {
                 val batchButton = Button(this).apply {
-                    text = "이 분류 ${movable.size}개 파일 일괄 복사·검증"
+                    text = "이 분류 ${movable.size}개 안전 이동"
                     setOnClickListener { chooseBatchMoveDestination(movable) }
                 }
                 results.addView(batchButton)
@@ -738,6 +738,7 @@ class MainActivity : Activity() {
                 val row = TextView(this).apply {
                     text = (if (blocked) "🔒 " else "📄 ") + entry.relativePath + " · " + humanSize(entry.size)
                     textSize = 13f
+                    setTextColor(0xFFE3ECF7.toInt())
                     setPadding(8, 7, 4, 7)
                     if (!blocked) setOnClickListener {
                         AlertDialog.Builder(this@MainActivity)
@@ -1031,14 +1032,14 @@ class MainActivity : Activity() {
                         .setMessage("검증에 성공한 파일이 없습니다. 실패 ${failed.size}개")
                         .setPositiveButton("확인", null).show()
                 } else {
-                    AlertDialog.Builder(this).setTitle("일괄 복사·검증 완료")
-                        .setMessage("성공 ${copied.size}개 · 실패 ${failed.size}개\n실패 예시: ${failed.take(5).joinToString("\\n")}\n\n검증 성공한 원본을 삭제해 이동을 완료할까요? 실패한 파일은 원본을 유지합니다.")
+                    AlertDialog.Builder(this).setTitle("안전 이동 준비 완료")
+                        .setMessage("성공 ${copied.size}개 · 실패 ${failed.size}개\n실패 예시: ${failed.take(5).joinToString("\\n")}\n\n검증에 성공한 ${copied.size}개 파일을 이동 완료할까요? 승인하면 해당 원본을 삭제합니다. 실패한 파일은 원본을 유지합니다.")
                         .setNegativeButton("복사본만 유지") { _, _ ->
                             copied.forEach { (src, dst) -> recordOperation("분류 일괄 복사", src.relativePath, dst.uri.toString()) }
                             toast("검증 성공 ${copied.size}개 복사본을 유지했습니다.")
                             if (selectedTrees.isNotEmpty()) scanSelectedFolders()
                         }
-                        .setPositiveButton("검증 성공 원본 삭제") { _, _ ->
+                        .setPositiveButton("원본 삭제하여 이동 완료") { _, _ ->
                             var deleted = 0
                             copied.forEach { (src, dst) ->
                                 val ok = try { deleteEntry(src.uri) } catch (_: Exception) { false }
