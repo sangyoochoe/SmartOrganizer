@@ -1308,7 +1308,9 @@ class MainActivity : Activity() {
             val detail = if (item.directory) "" else " · ${humanSize(item.size)}"
             val label = TextView(this).apply {
                 text = (if (item.directory) "📁 " else "📄 ") + item.relativePath + detail
-                textSize = 13f; setPadding(8, 7, 4, 7)
+                textSize = 13f
+                setTextColor(0xFFE3ECF7.toInt())
+                setPadding(8, 10, 8, 10)
                 setOnClickListener { if (!item.directory) showFileActions(item) }
             }
             row.addView(label, LinearLayout.LayoutParams(0, -2, 1f))
@@ -1322,7 +1324,15 @@ class MainActivity : Activity() {
         results.addView(TextView(this).apply {
             this.text = text
             textSize = if (heading) 16f else 13f
-            setPadding(if (heading) 0 else 4, if (heading) 14 else 6, 4, 6)
+            setTextColor(if (heading) 0xFF70D6E5.toInt() else 0xFFE3ECF7.toInt())
+            if (heading) typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setPadding(if (heading) 0 else 8, if (heading) 14 else 9, 8, 9)
+            if (!heading) {
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(0xFF111D2E.toInt())
+                    cornerRadius = 10f * resources.displayMetrics.density
+                }
+            }
         })
     }
 
