@@ -36,6 +36,7 @@ class MainActivity : Activity() {
     private val selectedLooseFiles = linkedMapOf<String, Uri>()
     private val checkedEntries = linkedSetOf<String>()
     private lateinit var summary: TextView
+    private lateinit var storageSummary: TextView
     private lateinit var results: LinearLayout
     private lateinit var scanButton: Button
     private lateinit var runScanButton: Button
@@ -66,215 +67,113 @@ class MainActivity : Activity() {
     }
 
     private fun buildUi() {
+        val density = resources.displayMetrics.density
+        val widthDp = resources.configuration.screenWidthDp
+        val landscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        val columns = when {
+            widthDp >= 840 || (landscape && widthDp >= 700) -> 3
+            widthDp >= 600 || landscape -> 2
+            else -> 1
+        }
         val outer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(18, 22, 18, 24)
+            setPadding(18, 18, 18, 24)
             setBackgroundColor(0xFF0B1220.toInt())
         }
         val title = TextView(this).apply {
-            text = "✦  스마트 정리함"
-            textSize = 27f
-            setTextColor(0xFFF2F7FF.toInt())
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
+            text = "✦  스마트 정리함"; textSize = 27f
+            setTextColor(0xFFF2F7FF.toInt()); typeface = android.graphics.Typeface.DEFAULT_BOLD
             setPadding(0, 0, 0, 5)
         }
         val subtitle = TextView(this).apply {
-            text = "파일 · 미디어 · 기기 꾸미기를 한곳에서"
-            textSize = 13f
+            text = "파일 · 미디어 · 기기 꾸미기를 한곳에서"; textSize = 13f
             setTextColor(0xFF9FB2C9.toInt())
         }
         summary = TextView(this).apply {
-            text = "분석할 폴더를 선택하세요. 실제 파일만 검사하며 자동 삭제하지 않습니다."
-            textSize = 14f
-            setTextColor(0xFFEAF4FF.toInt())
-            setPadding(16, 16, 16, 16)
-            background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 22f }
+            text = "검사 전 · 분석할 폴더를 선택하거나 Download 전체 검사를 시작하세요."
+            textSize = 14f; setTextColor(0xFFEAF4FF.toInt()); setPadding(16, 15, 16, 15)
+            background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 20f }
         }
-        scanButton = Button(this).apply {
-            text = "＋ 스캔할 폴더 추가"
-            setOnClickListener { chooseFolder() }
-            setOnLongClickListener { showSelectedFolders(); true }
+        storageSummary = TextView(this).apply {
+            textSize = 13f; setTextColor(0xFFB9D0E8.toInt()); setPadding(16, 12, 16, 12)
+            background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF132B3B.toInt()); cornerRadius = 18f }
         }
-        val downloadFolderButton = Button(this).apply {
-            text = "⬇ Download 폴더 열기 · 하위 폴더 선택"
-            setOnClickListener { chooseDownloadFolder() }
-        }
-        fullStorageScanButton = Button(this).apply {
-            text = "Download 전체 자동 검사 (모든 파일 접근)"
-            setOnClickListener { chooseFullStorageRoot() }
-        }
-        runScanButton = Button(this).apply {
-            text = "선택한 폴더 모두 스캔 (0개)"
-            isEnabled = false
-            setOnClickListener { scanSelectedFolders() }
-        }
-        mediaScanButton = Button(this).apply {
-            text = "사진·동영상·음악 전체 자동 검사"
-            setOnClickListener { requestMediaAccessAndScan() }
-        }
-        addFilesButton = Button(this).apply { text = "＋ 폴더 밖 개별 파일 여러 개 추가"; setOnClickListener { chooseFiles() } }
-        bulkDeleteButton = Button(this).apply { text = "선택한 파일 일괄 삭제"; isEnabled = false; setOnClickListener { confirmBulkDelete() } }
-        manageFoldersButton = Button(this).apply {
-            text = "선택 폴더 관리"
-            setOnClickListener { showSelectedFolders() }
-        }
-        duplicateButton = Button(this).apply {
-            text = "완전 중복 파일 검사 (SHA-256)"
-            isEnabled = false
-            setOnClickListener { scanExactDuplicates() }
-        }
-        insightButton = Button(this).apply {
-            text = "정리 후보 분석 (대용량·오래됨·이름 중복)"
-            isEnabled = false
-            setOnClickListener { showOrganizationInsights() }
-        }
-        classifyButton = Button(this).apply {
-            text = "파일 유형 자동 분류·이동 추천"
-            isEnabled = false
-            setOnClickListener { showAutoFileClassification() }
-        }
-        contentAuditButton = Button(this).apply {
-            text = "파일 내용 시그니처 검사"
-            isEnabled = false
-            setOnClickListener { auditFileSignatures() }
-        }
-        apkButton = Button(this).apply {
-            text = "APK 권한·버전 검사"
-            isEnabled = false
-            setOnClickListener { inspectApks() }
-        }
-        archiveButton = Button(this).apply {
-            text = "ZIP 압축파일 내부 구성 검사"
-            isEnabled = false
-            setOnClickListener { inspectArchives() }
-        }
-        historyButton = Button(this).apply {
-            text = "파일 작업 기록"
-            setOnClickListener { showOperationHistory() }
-        }
-        appsButton = Button(this).apply {
-            text = "앱 분류 · 그룹 관리"
-            setOnClickListener { showLaunchableApps() }
-        }
-        wallpaperButton = Button(this).apply {
-            text = "월페이퍼 스튜디오 (사진·동영상)"
-            setOnClickListener { startActivity(Intent(this@MainActivity, WallpaperStudioActivity::class.java)) }
-        }
-        val sailorMoonButton = Button(this).apply {
-            text = "☾ 세일러문 Fold 테마 설정"
-            setOnClickListener { startActivity(Intent(this@MainActivity, SailorMoonSetupActivity::class.java)) }
-        }
-        launcherButton = Button(this).apply {
-            text = "사진 기반 나만의 홈 화면 열기"
-            setOnClickListener { startActivity(Intent(this@MainActivity, LauncherActivity::class.java)) }
-        }
-        val cyberDashboardButton = Button(this).apply {
-            text = "⚡ 사이버 포뮬러 대시보드"
-            setOnClickListener { startActivity(Intent(this@MainActivity, CyberDashboardActivity::class.java)) }
-        }
-        val desktopStudioButton = Button(this).apply {
-            text = "🖥 AI 데스크톱 스튜디오"
-            setOnClickListener { startActivity(Intent(this@MainActivity, DesktopStudioActivity::class.java)) }
-        }
-        val widgetStudioButton = Button(this).apply {
-            text = "▦ 나만의 위젯 스튜디오"
-            setOnClickListener { startActivity(Intent(this@MainActivity, WidgetStudioActivity::class.java)) }
-        }
+        scanButton = Button(this).apply { text = "＋ 스캔할 폴더 추가"; setOnClickListener { chooseFolder() }; setOnLongClickListener { showSelectedFolders(); true } }
+        val downloadFolderButton = Button(this).apply { text = "⬇ Download 하위 폴더 선택"; setOnClickListener { chooseDownloadFolder() } }
+        fullStorageScanButton = Button(this).apply { text = "Download 전체 자동 검사"; setOnClickListener { chooseFullStorageRoot() } }
+        runScanButton = Button(this).apply { text = "선택한 폴더 모두 스캔 (0개)"; isEnabled = false; setOnClickListener { scanSelectedFolders() } }
+        mediaScanButton = Button(this).apply { text = "사진 · 동영상 · 음악 검사"; setOnClickListener { requestMediaAccessAndScan() } }
+        addFilesButton = Button(this).apply { text = "＋ 개별 파일 여러 개 추가"; setOnClickListener { chooseFiles() } }
+        bulkDeleteButton = Button(this).apply { text = "선택 파일 일괄 삭제"; isEnabled = false; setOnClickListener { confirmBulkDelete() } }
+        manageFoldersButton = Button(this).apply { text = "선택 폴더 관리"; setOnClickListener { showSelectedFolders() } }
+        duplicateButton = Button(this).apply { text = "완전 중복 검사 · SHA-256"; isEnabled = false; setOnClickListener { scanExactDuplicates() } }
+        insightButton = Button(this).apply { text = "정리 후보 분석"; isEnabled = false; setOnClickListener { showOrganizationInsights() } }
+        classifyButton = Button(this).apply { text = "파일 유형 분류 · 이동 추천"; isEnabled = false; setOnClickListener { showAutoFileClassification() } }
+        contentAuditButton = Button(this).apply { text = "파일 내용 시그니처 검사"; isEnabled = false; setOnClickListener { auditFileSignatures() } }
+        apkButton = Button(this).apply { text = "APK 권한 · 버전 검사"; isEnabled = false; setOnClickListener { inspectApks() } }
+        archiveButton = Button(this).apply { text = "ZIP 내부 구성 검사"; isEnabled = false; setOnClickListener { inspectArchives() } }
+        historyButton = Button(this).apply { text = "파일 작업 기록"; setOnClickListener { showOperationHistory() } }
+        appsButton = Button(this).apply { text = "앱 분류 · 그룹 관리"; setOnClickListener { showLaunchableApps() } }
+        wallpaperButton = Button(this).apply { text = "월페이퍼 스튜디오"; setOnClickListener { startActivity(Intent(this@MainActivity, WallpaperStudioActivity::class.java)) } }
+        val sailorMoonButton = Button(this).apply { text = "☾ 세일러문 Fold 테마"; setOnClickListener { startActivity(Intent(this@MainActivity, SailorMoonSetupActivity::class.java)) } }
+        launcherButton = Button(this).apply { text = "사진 기반 나만의 홈 화면"; setOnClickListener { startActivity(Intent(this@MainActivity, LauncherActivity::class.java)) } }
+        val cyberDashboardButton = Button(this).apply { text = "⚡ 사이버 포뮬러 대시보드"; setOnClickListener { startActivity(Intent(this@MainActivity, CyberDashboardActivity::class.java)) } }
+        val desktopStudioButton = Button(this).apply { text = "🖥 AI 데스크톱 스튜디오"; setOnClickListener { startActivity(Intent(this@MainActivity, DesktopStudioActivity::class.java)) } }
+        val widgetStudioButton = Button(this).apply { text = "▦ 나만의 위젯 스튜디오"; setOnClickListener { startActivity(Intent(this@MainActivity, WidgetStudioActivity::class.java)) } }
         val helpButton = Button(this).apply {
             text = "사용 방법 · 정리 순서"
             setOnClickListener {
-                AlertDialog.Builder(this@MainActivity)
-                    .setTitle("스마트 정리함 사용 방법")
-                    .setMessage(
-                        "① 파일 정리\n" +
-                        "• ‘사진·동영상·음악 전체 자동 검사’를 누르면 허용한 미디어를 자동으로 불러옵니다.\n" +
-                        "• 문서·다운로드 파일은 ‘스캔할 폴더 추가’에서 Download, Documents 등을 선택한 뒤 ‘선택한 폴더 모두 스캔’을 누르세요. 추가한 폴더는 누적됩니다.\n" +
-                        "② 정리하기\n" +
-                        "• ‘정리 후보 분석’은 큰 파일·오래된 파일을 찾아 보여줍니다.\n" +
-                        "• ‘완전 중복 파일 검사’는 SHA-256으로 내용이 같은 파일을 찾습니다.\n" +
-                        "• ‘파일 유형 자동 분류’는 사진·문서·압축 파일 등으로 분류하고 이동을 제안합니다.\n" +
-                        "• 파일을 눌러 작업을 선택하고, 삭제 전에는 반드시 확인창을 읽으세요. 안전 정리 모드에서는 일괄 삭제가 차단됩니다.\n\n" +
-                        "③ 앱 묶기\n" +
-                        "• ‘앱 분류 · 그룹 관리’를 열고 앱을 누르면 앱 정보, 길게 누르면 분류명을 직접 지정할 수 있습니다.\n" +
-                        "• 현재 앱 분류는 이 앱 안의 목록을 업무·게임·사진 등으로 라벨링하는 기능입니다. One UI 홈 화면에 폴더를 자동 생성하거나 앱 아이콘을 실제로 이동시키지는 않습니다.\n\n" +
-                        "④ Fold 화면·꾸미기\n" +
-                        "• 월페이퍼, 위젯, 데스크톱 스튜디오에서 각각 배경과 위젯을 구성하세요.\n\n" +
-                        "주의: Android/data·obb 등 시스템 보호 폴더는 일반 앱이 전체 접근할 수 없습니다. 자동 검사는 접근 허용된 미디어 범위에 한합니다."
-                    )
-                    .setPositiveButton("확인", null)
-                    .show()
+                AlertDialog.Builder(this@MainActivity).setTitle("스마트 정리함 사용 방법")
+                    .setMessage("① 파일 정리\n• 미디어 검사는 허용한 사진·동영상·음악을 불러옵니다.\n• Download 전체 검사는 Android 설정에서 ‘모든 파일 접근’을 허용한 뒤 실행합니다.\n• 폴더 추가에서 Download, Documents 등을 선택할 수도 있습니다.\n\n② 분석 도구\n• 중복·정리 후보·파일 유형·시그니처·APK·ZIP 분석을 제공합니다.\n• 삭제 전 확인창을 표시하며 자동 삭제하지 않습니다.\n\n③ 앱 관리\n• 설치 앱을 분류하고 앱 권한·버전 정보를 확인합니다.\n\n④ 꾸미기\n• 월페이퍼, 위젯, 데스크톱 스튜디오에서 Fold 화면을 구성하세요.\n\n주의: Android/data·obb 등 시스템 보호 폴더는 접근이 제한될 수 있습니다.")
+                    .setPositiveButton("확인", null).show()
             }
         }
-        val actions = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(helpButton)
-            addView(scanButton)
-            addView(downloadFolderButton)
-            addView(mediaScanButton)
-            addView(addFilesButton)
-            addView(bulkDeleteButton)
-            addView(fullStorageScanButton)
-            addView(runScanButton)
-            addView(Button(this@MainActivity).apply { text = "폴더별 용량 보기"; setOnClickListener { showFolderSizeReport() } })
-            addView(manageFoldersButton)
-            addView(duplicateButton)
-            addView(insightButton)
-            addView(classifyButton)
-            addView(contentAuditButton)
-            addView(apkButton)
-            addView(archiveButton)
-            addView(historyButton)
-            addView(appsButton)
-            addView(wallpaperButton)
-            addView(launcherButton)
-            addView(sailorMoonButton)
-            addView(cyberDashboardButton)
-            addView(desktopStudioButton)
-            addView(widgetStudioButton)
-        }
-        // One single scroll container for the entire page. A nested fixed-height
-        // ScrollView here used to trap touch gestures and hide the file results.
-        results = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, 8, 0, 8)
-        }
-        // Consistent branded controls and section dividers.
-        for (index in 0 until actions.childCount) {
-            val child = actions.getChildAt(index)
-            if (child is Button) {
-                child.isAllCaps = false
-                child.textSize = 14f
-                child.setTextColor(0xFFEAF4FF.toInt())
-                child.background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(if (child === mediaScanButton || child === runScanButton) 0xFF70D6E5.toInt() else 0xFF243650.toInt())
-                    cornerRadius = 16f
+        fun addSection(label: String, buttons: List<Button>) {
+            outer.addView(TextView(this).apply {
+                text = label; textSize = 16f; setTextColor(0xFF70D6E5.toInt())
+                typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(3, 18, 3, 7)
+            })
+            val grid = android.widget.GridLayout(this).apply { columnCount = columns; useDefaultMargins = false; alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS }
+            buttons.forEachIndexed { index, button ->
+                button.isAllCaps = false; button.textSize = 13f; button.gravity = android.view.Gravity.CENTER
+                button.setTextColor(if (button === mediaScanButton || button === runScanButton || button === fullStorageScanButton) 0xFF071522.toInt() else 0xFFEAF4FF.toInt())
+                button.background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(if (button === mediaScanButton || button === runScanButton || button === fullStorageScanButton) 0xFF70D6E5.toInt() else 0xFF243650.toInt())
+                    cornerRadius = 18f * density; setStroke((1 * density).toInt(), 0xFF36516D.toInt())
                 }
-                if (child === mediaScanButton || child === runScanButton) child.setTextColor(0xFF071522.toInt())
-                child.setPadding(16, 12, 16, 12)
+                button.setPadding((10*density).toInt(), (12*density).toInt(), (10*density).toInt(), (12*density).toInt())
+                button.minHeight = (76*density).toInt()
+                val lp = android.widget.GridLayout.LayoutParams(
+                    android.widget.GridLayout.spec(index / columns, 1f),
+                    android.widget.GridLayout.spec(index % columns, 1f)
+                ).apply { width = 0; height = (82*density).toInt(); setMargins((4*density).toInt(), (4*density).toInt(), (4*density).toInt(), (4*density).toInt()) }
+                grid.addView(button, lp)
             }
+            outer.addView(grid)
         }
-        fun addSectionHeader(label: String, index: Int) {
-            actions.addView(TextView(this).apply {
-                text = label
-                textSize = 16f
-                setTextColor(0xFF70D6E5.toInt())
-                typeface = android.graphics.Typeface.DEFAULT_BOLD
-                setPadding(4, 18, 4, 6)
-            }, index)
-        }
-        addSectionHeader("기기 및 홈 화면", 17)
-        addSectionHeader("분석 도구", 14)
-        addSectionHeader("파일 정리", 0)
-        outer.addView(title)
-        outer.addView(subtitle)
-        outer.addView(summary)
-        outer.addView(actions)
-        outer.addView(results)
-        setContentView(ScrollView(this).apply {
-            isFillViewport = true
-            clipToPadding = false
-            addView(outer)
+        outer.addView(title); outer.addView(subtitle); outer.addView(summary); outer.addView(storageSummary)
+        addSection("파일 정리", listOf(fullStorageScanButton, mediaScanButton, scanButton, downloadFolderButton, runScanButton, addFilesButton, bulkDeleteButton, manageFoldersButton))
+        addSection("분석 도구", listOf(duplicateButton, insightButton, classifyButton, contentAuditButton, apkButton, archiveButton, historyButton, helpButton))
+        addSection("앱 관리", listOf(appsButton))
+        addSection("꾸미기", listOf(wallpaperButton, launcherButton, sailorMoonButton, cyberDashboardButton, desktopStudioButton, widgetStudioButton))
+        outer.addView(TextView(this).apply {
+            text = "검사 결과 전체 목록"; textSize = 18f; setTextColor(0xFFF2F7FF.toInt())
+            typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(2, 22, 2, 8)
         })
+        results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 6, 0, 8) }
+        outer.addView(results)
+        setContentView(ScrollView(this).apply { isFillViewport = true; clipToPadding = false; addView(outer) })
+        updateStorageSummary()
+    }
+
+    private fun updateStorageSummary() {
+        try {
+            val stat = android.os.StatFs(Environment.getExternalStorageDirectory().absolutePath)
+            val total = stat.totalBytes.coerceAtLeast(0L)
+            val free = stat.availableBytes.coerceAtLeast(0L)
+            val used = (total - free).coerceAtLeast(0L)
+            storageSummary.text = "저장 공간\n사용 \${humanSize(used)} / 전체 \${humanSize(total)}\n남은 공간 \${humanSize(free)}"
+        } catch (_: Exception) { storageSummary.text = "저장 공간 정보를 가져올 수 없습니다." }
     }
 
     private fun requestMediaAccessAndScan() {
@@ -378,6 +277,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        if (::storageSummary.isInitialized) updateStorageSummary()
         if (::fullStorageScanButton.isInitialized && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             fullStorageScanButton.text = if (Environment.isExternalStorageManager()) "⬇ Download 전체 다시 검사 (권한 허용됨)" else "⬇ Download 전체 검사 (모든 파일 접근 권한 필요)"
         }
@@ -1476,3 +1376,4 @@ class MainActivity : Activity() {
         private val ARCHIVE_RISKY_PATH_MARKERS = listOf("../", "/../", "autorun", "startup", "payload")
     }
 }
+
