@@ -113,6 +113,11 @@ class MainActivity : Activity() {
         apkButton = Button(this).apply { text = "APK 권한 · 버전 검사"; isEnabled = false; setOnClickListener { inspectApks() } }
         archiveButton = Button(this).apply { text = "ZIP 내부 구성 검사"; isEnabled = false; setOnClickListener { inspectArchives() } }
         historyButton = Button(this).apply { text = "파일 작업 기록"; setOnClickListener { showOperationHistory() } }
+        val versionManagerButton = Button(this).apply {
+            text = "파일 버전 · 프로젝트 관리"
+            isEnabled = false
+            setOnClickListener { showVersionManager() }
+        }
         appsButton = Button(this).apply { text = "앱 분류 · 그룹 관리"; setOnClickListener { showLaunchableApps() } }
         wallpaperButton = Button(this).apply { text = "월페이퍼 스튜디오"; setOnClickListener { startActivity(Intent(this@MainActivity, WallpaperStudioActivity::class.java)) } }
         val sailorMoonButton = Button(this).apply { text = "☾ 세일러문 Fold 테마"; setOnClickListener { startActivity(Intent(this@MainActivity, SailorMoonSetupActivity::class.java)) } }
@@ -149,7 +154,7 @@ class MainActivity : Activity() {
         }
         outer.addView(title); outer.addView(subtitle); outer.addView(summary); outer.addView(storageSummary)
         addSection("파일 정리", listOf(fullStorageScanButton, mediaScanButton, scanButton, downloadFolderButton, runScanButton, addFilesButton, bulkDeleteButton, manageFoldersButton))
-        addSection("분석 도구", listOf(duplicateButton, insightButton, classifyButton, contentAuditButton, apkButton, archiveButton, historyButton, helpButton))
+        addSection("분석 도구", listOf(versionManagerButton, duplicateButton, insightButton, classifyButton, contentAuditButton, apkButton, archiveButton, historyButton, helpButton))
         addSection("앱 관리", listOf(appsButton))
         addSection("꾸미기", listOf(wallpaperButton, launcherButton, sailorMoonButton, cyberDashboardButton, desktopStudioButton, widgetStudioButton))
         outer.addView(TextView(this).apply {
@@ -739,6 +744,114 @@ class MainActivity : Activity() {
             if (group.size > 200) addLine("화면 표시 제한: 나머지 ${group.size - 200}개 생략")
         }
         summary.text = "파일 분류 추천 완료 · ${files.size}개 · 자동 이동/삭제 없음"
+    }
+
+    private fun showVersionManager() {
+        val files = entries.filter { !it.directory }
+        if (files.isEmpty()) { toast("먼저 폴더를 스캔하세요."); return }
+        results.removeAllViews()
+        addLine("파일 버전 · 프로젝트 관리", true)
+        addLine("① 파일명에 표시된 버전 ② 같은 프로젝트 폴더의 파일을 함께 살펴봅니다.")
+        addLine("최신 판단은 버전 번호가 있으면 버전 번호 우선, 없으면 수정 날짜 참고입니다. 파일 내용과 용도를 확인한 뒤 정리하세요.")
+
+        val versionPattern = Regex("(?i)(?:^|[._ -])(?:v|ver|version)[._ -]?(\\d+(?:[._-]\\d+)*)")
+        fun versionOf(name: String): List<Int>? {
+            val match = versionPattern.find(name) ?: return null
+            return match.groupValues[1].split(Regex("[._-]")).mapNotNull { it.toIntOrNull() }.takeIf { it.isNotEmpty() }
+        }
+        fun familyName(name: String): String {
+            val withoutVersion = name.replace(versionPattern, " ").replace(Regex("\\s+"), " ").trim()
+            return withoutVersion.lowercase(java.util.Locale.ROOT)
+        }
+        fun compareVersion(a: Entry, b: Entry): Int {
+            val av = versionOf(a.name) ?: emptyList()
+            val bv = versionOf(b.name) ?: emptyList()
+            if (av.isNotEmpty() && bv.isNotEmpty()) {
+                for (i in 0 until maxOf(av.size, bv.size)) {
+                    val diff = (av.getOrElse(i) { 0 }).compareTo(bv.getOrElse(i) { 0 })
+                    if (diff != 0) return diff
+                }
+            }
+            return a.modified.compareTo(b.modified)
+        }
+        val versionGroups = files.groupBy { familyName(it.name) }
+            .filter { (_, group) -> group.size > 1 && group.any { versionOf(it.name) != null } }
+            .toSortedMap()
+        addLine("파일명 버전 그룹 · ${versionGroups.size}개", true)
+        if (versionGroups.isEmpty()) addLine("v1, v2, version 2.1 같은 버전 표기가 포함된 파일 그룹이 없습니다.")
+        versionGroups.forEach { (family, group) ->
+            val ordered = group.sortedWith(Comparator { a, b -> compareVersion(b, a) })
+            val latest = ordered.first()
+            val groupBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            val toggle = Button(this).apply {
+                text = "▶ ${family} · ${group.size}개  | 최신 후보: ${latest.name}"
+                isAllCaps = false
+            }
+            val detail = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = android.view.View.GONE }
+            toggle.setOnClickListener {
+                val expanded = detail.visibility != android.view.View.VISIBLE
+                detail.visibility = if (expanded) android.view.View.VISIBLE else android.view.View.GONE
+                toggle.text = (if (expanded) "▼ " else "▶ ") + "${family} · ${group.size}개  | 최신 후보: ${latest.name}"
+            }
+            ordered.forEachIndexed { index, entry ->
+                val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+                row.addView(CheckBox(this).apply {
+                    text = if (entry.uri.toString() == latest.uri.toString()) "보존 후보" else "정리 후보"
+                    isChecked = checkedEntries.contains(entry.uri.toString())
+                    setOnCheckedChangeListener { _, checked ->
+                        if (checked) checkedEntries.add(entry.uri.toString()) else checkedEntries.remove(entry.uri.toString())
+                        bulkDeleteButton.isEnabled = checkedEntries.isNotEmpty()
+                    }
+                })
+                val label = TextView(this).apply {
+                    text = "${entry.name} · ${humanSize(entry.size)} · ${formatDate(entry.modified)}" +
+                        (if (entry.uri.toString() == latest.uri.toString()) "  ★ 최신 후보" else "  · 구버전 후보")
+                    textSize = 12f
+                    setTextColor(if (index == 0) 0xFF70D6E5.toInt() else 0xFFE3ECF7.toInt())
+                    setPadding(6, 8, 6, 8)
+                    setOnClickListener { showFileActions(entry) }
+                }
+                row.addView(label, LinearLayout.LayoutParams(0, -2, 1f))
+                detail.addView(row)
+            }
+            groupBox.addView(toggle)
+            groupBox.addView(detail)
+            results.addView(groupBox)
+        }
+
+        val projectGroups = files.groupBy { it.relativePath.substringBeforeLast("/", "").ifBlank { "(최상위 폴더)" } }
+            .filter { (_, group) -> group.size >= 3 }
+            .toSortedMap()
+        addLine("프로젝트·폴더 단위 파일 그룹 · ${projectGroups.size}개", true)
+        addLine("같은 폴더에 있는 파일을 프로젝트 후보로 묶습니다. 서로 다른 파일의 최신 여부는 자동 판정하지 않습니다.")
+        projectGroups.forEach { (folder, group) ->
+            val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+            val toggle = Button(this).apply { text = "▶ ${folder} · ${group.size}개"; isAllCaps = false }
+            val detail = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = android.view.View.GONE }
+            toggle.setOnClickListener {
+                val expanded = detail.visibility != android.view.View.VISIBLE
+                detail.visibility = if (expanded) android.view.View.VISIBLE else android.view.View.GONE
+                toggle.text = (if (expanded) "▼ " else "▶ ") + "${folder} · ${group.size}개"
+            }
+            group.sortedByDescending { it.modified }.forEach { entry ->
+                val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+                row.addView(CheckBox(this).apply {
+                    isChecked = checkedEntries.contains(entry.uri.toString())
+                    setOnCheckedChangeListener { _, checked ->
+                        if (checked) checkedEntries.add(entry.uri.toString()) else checkedEntries.remove(entry.uri.toString())
+                        bulkDeleteButton.isEnabled = checkedEntries.isNotEmpty()
+                    }
+                })
+                row.addView(TextView(this).apply {
+                    text = "${entry.name} · ${humanSize(entry.size)} · ${formatDate(entry.modified)}"
+                    textSize = 12f; setTextColor(0xFFE3ECF7.toInt()); setPadding(6, 7, 6, 7)
+                    setOnClickListener { showFileActions(entry) }
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                detail.addView(row)
+            }
+            box.addView(toggle); box.addView(detail); results.addView(box)
+        }
+        summary.text = "버전 그룹 ${versionGroups.size}개 · 프로젝트 폴더 그룹 ${projectGroups.size}개 · 선택 후 하단 ‘선택 파일 일괄 삭제’ 또는 파일 메뉴에서 이동 가능"
     }
 
     private fun showOrganizationInsights() {
@@ -1406,6 +1519,7 @@ class MainActivity : Activity() {
         contentAuditButton.isEnabled = !busy && entries.any { !it.directory }
         apkButton.isEnabled = !busy && entries.any { !it.directory }
         archiveButton.isEnabled = !busy && entries.any { !it.directory && it.name.endsWith(".zip", true) }
+        versionManagerButton.isEnabled = !busy && entries.any { !it.directory }
         appsButton.isEnabled = !busy
     }
 
