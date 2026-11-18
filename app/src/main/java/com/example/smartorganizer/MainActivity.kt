@@ -58,6 +58,7 @@ class MainActivity : Activity() {
     private lateinit var wallpaperButton: Button
     private var pendingMoveEntry: Entry? = null
     private var pendingBatchMoveEntries: List<Entry> = emptyList()
+    private var pendingBatchMoveFolderName: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -451,7 +452,9 @@ class MainActivity : Activity() {
                 val batch = pendingBatchMoveEntries
                 if (batch.isNotEmpty()) {
                     pendingBatchMoveEntries = emptyList()
-                    copyBatchThenOfferMove(batch, destinationUri)
+                    val folderName = pendingBatchMoveFolderName
+                    pendingBatchMoveFolderName = null
+                    copyBatchThenOfferMove(batch, destinationUri, folderName)
                 } else if (source != null) copyThenOfferMove(source, destinationUri)
             }
             return
@@ -828,7 +831,12 @@ class MainActivity : Activity() {
         projectGroups.forEach { (folder, group) ->
             val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
             val toggle = Button(this).apply { text = "▶ ${folder} · ${group.size}개"; isAllCaps = false }
-            val detail = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = android.view.View.GONE }
+            val moveGroup = Button(this).apply {
+                text = "📁 이 프로젝트 파일 ${group.size}개를 폴더째 묶어 이동"
+                isAllCaps = false
+                setOnClickListener { chooseBatchMoveDestination(group, folder.substringAfterLast("/").ifBlank { "프로젝트" }) }
+            }
+            val detail = LinearLayout(this).apply { orientation = android.widget.LinearLayout.VERTICAL; visibility = android.view.View.GONE }
             toggle.setOnClickListener {
                 val expanded = detail.visibility != android.view.View.VISIBLE
                 detail.visibility = if (expanded) android.view.View.VISIBLE else android.view.View.GONE
@@ -850,7 +858,7 @@ class MainActivity : Activity() {
                 }, LinearLayout.LayoutParams(0, -2, 1f))
                 detail.addView(row)
             }
-            box.addView(toggle); box.addView(detail); results.addView(box)
+            box.addView(toggle); box.addView(moveGroup); box.addView(detail); results.addView(box)
         }
         summary.text = "버전 그룹 ${versionGroups.size}개 · 프로젝트 폴더 그룹 ${projectGroups.size}개 · 선택 후 하단 ‘선택 파일 일괄 삭제’ 또는 파일 메뉴에서 이동 가능"
     }
@@ -939,17 +947,21 @@ class MainActivity : Activity() {
         startActivityForResult(intent, REQUEST_MOVE_DESTINATION)
     }
 
-    private fun chooseBatchMoveDestination(files: List<Entry>) {
+    private fun chooseBatchMoveDestination(files: List<Entry>, groupFolderName: String? = null) {
         val safe = files.filter { !isProtectedPath(it) &&
             !listOf(".apk", ".apks", ".aab", ".dex", ".so", ".jar", ".exe", ".dll").any { ext -> it.name.endsWith(ext, true) } }
         if (safe.isEmpty()) { toast("안전하게 이동할 수 있는 파일이 없습니다."); return }
+        val folderNote = groupFolderName?.let { "
+선택한 목적지 안에 ‘$it’ 폴더를 만들어 파일을 함께 넣습니다." } ?: ""
         AlertDialog.Builder(this)
-            .setTitle("분류 일괄 복사")
-            .setMessage("${safe.size}개 파일을 선택한 폴더로 복사하고 각각 크기를 검증합니다. 이름 충돌·검증 실패 파일은 건너뜁니다. 원본 삭제는 복사 검증 후 별도 승인받습니다.")
+            .setTitle(if (groupFolderName == null) "파일 일괄 이동" else "프로젝트 묶음 이동")
+            .setMessage("${safe.size}개 파일을 한 번에 복사하고 각각 크기를 검증합니다. 이름 충돌·검증 실패 파일은 건너뜁니다.$folderNote
+원본은 복사 검증 후 이동 완료를 승인할 때만 삭제합니다.")
             .setNegativeButton("취소", null)
-            .setPositiveButton("목적지 선택") { _, _ ->
+            .setPositiveButton("이동 위치 선택") { _, _ ->
                 pendingMoveEntry = null
                 pendingBatchMoveEntries = safe
+                pendingBatchMoveFolderName = groupFolderName
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                 }
@@ -957,10 +969,17 @@ class MainActivity : Activity() {
             }.show()
     }
 
-    private fun copyBatchThenOfferMove(files: List<Entry>, destinationUri: Uri) {
-        val destination = DocumentFile.fromTreeUri(this, destinationUri)
-        if (destination == null || !destination.isDirectory || !destination.canWrite()) {
+    private fun copyBatchThenOfferMove(files: List<Entry>, destinationUri: Uri, groupFolderName: String? = null) {
+        val selectedDestination = DocumentFile.fromTreeUri(this, destinationUri)
+        if (selectedDestination == null || !selectedDestination.isDirectory || !selectedDestination.canWrite()) {
             toast("선택한 목적지에 쓸 수 없습니다."); return
+        }
+        val destination = if (groupFolderName.isNullOrBlank()) selectedDestination else {
+            selectedDestination.findFile(groupFolderName)?.takeIf { it.isDirectory }
+                ?: selectedDestination.createDirectory(groupFolderName)
+        }
+        if (destination == null || !destination.isDirectory || !destination.canWrite()) {
+            toast("프로젝트 폴더를 목적지에 만들 수 없습니다. 같은 이름의 파일·폴더가 있는지 확인하세요."); return
         }
         val destName = (destination.name ?: "").trim().lowercase(java.util.Locale.ROOT)
         val blockedNames = setOf("android", "data", "obb", "system", "vendor", "product", "apex", "windows", "program files")
