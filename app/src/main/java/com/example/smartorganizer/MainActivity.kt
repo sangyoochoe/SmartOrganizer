@@ -122,11 +122,7 @@ class MainActivity : Activity() {
         val widgetStudioButton = Button(this).apply { text = "▦ 나만의 위젯 스튜디오"; setOnClickListener { startActivity(Intent(this@MainActivity, WidgetStudioActivity::class.java)) } }
         val helpButton = Button(this).apply {
             text = "사용 방법 · 정리 순서"
-            setOnClickListener {
-                AlertDialog.Builder(this@MainActivity).setTitle("스마트 정리함 사용 방법")
-                    .setMessage("① 파일 정리\n• 미디어 검사는 허용한 사진·동영상·음악을 불러옵니다.\n• Download 전체 검사는 Android 설정에서 ‘모든 파일 접근’을 허용한 뒤 실행합니다.\n• 폴더 추가에서 Download, Documents 등을 선택할 수도 있습니다.\n\n② 분석 도구\n• 중복·정리 후보·파일 유형·시그니처·APK·ZIP 분석을 제공합니다.\n• 삭제 전 확인창을 표시하며 자동 삭제하지 않습니다.\n\n③ 앱 관리\n• 설치 앱을 분류하고 앱 권한·버전 정보를 확인합니다.\n\n④ 꾸미기\n• 월페이퍼, 위젯, 데스크톱 스튜디오에서 Fold 화면을 구성하세요.\n\n주의: Android/data·obb 등 시스템 보호 폴더는 접근이 제한될 수 있습니다.")
-                    .setPositiveButton("확인", null).show()
-            }
+            setOnClickListener { showUserGuide() }
         }
         fun addSection(label: String, buttons: List<Button>) {
             outer.addView(TextView(this).apply {
@@ -164,6 +160,66 @@ class MainActivity : Activity() {
         outer.addView(results)
         setContentView(ScrollView(this).apply { isFillViewport = true; clipToPadding = false; addView(outer) })
         updateStorageSummary()
+    }
+
+    private fun showUserGuide() {
+        val guideText = """
+스마트 정리함 사용 설명서
+
+1. 검사 시작하기
+• ‘Download 전체 자동 검사’를 누르면 Android의 ‘모든 파일 접근’ 권한이 필요할 수 있습니다.
+• 권한 설정 후 앱으로 돌아오면 Download 폴더와 하위 폴더를 검사합니다.
+• ‘스캔할 폴더 추가’ 또는 ‘개별 파일 여러 개 추가’로 검사 범위를 직접 선택할 수도 있습니다.
+• 미디어 검사는 허용한 사진·동영상·음악에 접근합니다.
+
+2. 정리 후보와 이름 중복
+• ‘정리 후보 분석’은 이름이 같은 파일을 그룹으로 묶어 보여줍니다.
+• 이름이 같아도 내용이 다를 수 있습니다. 이름만 같다는 이유로 자동 삭제하지 마세요.
+• 그룹 안의 파일 경로를 확인하고 파일을 눌러 ‘파일 정보 보기’로 위치와 크기를 확인할 수 있습니다.
+
+3. 완전 중복 검사
+• ‘완전 중복 검사 · SHA-256’은 파일 내용을 해시로 비교해 내용이 같은 파일을 찾습니다.
+• 같은 내용의 파일이 여러 개라면 보존할 위치의 파일을 먼저 정하고, 나머지는 파일별 작업 메뉴에서 직접 삭제하세요.
+• 현재 버전은 중복 그룹에서 하나만 자동으로 남기고 나머지를 일괄 삭제하지 않습니다.
+
+4. 파일 이동·재분류
+• 파일 목록에서 파일을 누르고 ‘안전한 폴더로 이동·재분류’를 선택하면 이동할 위치를 지정할 수 있습니다.
+• 화면에서 분류되어 보이는 것과 실제 파일이 이동되는 것은 다릅니다. 실제 이동은 이동 메뉴에서 실행해야 합니다.
+• 이동이 지원되지 않는 위치나 Android 보호 영역에서는 작업이 제한될 수 있습니다.
+
+5. 삭제하기
+• 파일을 누르고 ‘삭제’를 선택하면 확인 절차를 거칩니다.
+• 여러 파일은 체크박스로 선택한 뒤 ‘선택 파일 일괄 삭제’를 사용할 수 있습니다.
+• 삭제는 되돌리기 어려울 수 있으므로 경로와 파일 내용을 확인한 뒤 실행하세요. 현재 별도의 삭제 대기함이나 휴지통은 제공하지 않습니다.
+
+6. 결과 목록 접기·펼치기
+• 현재 버전은 검사 결과를 목록으로 표시합니다. 분류 그룹별 접기·펼치기 기능은 아직 제공하지 않습니다.
+
+7. 앱 관리와 꾸미기
+• ‘앱 분류 · 그룹 관리’에서 설치 앱의 분류와 앱 정보·권한·버전을 확인할 수 있습니다.
+• 월페이퍼, 위젯, 데스크톱 스튜디오 등으로 화면을 꾸밀 수 있습니다.
+
+안전 안내
+• 검사 결과는 정리 판단을 돕기 위한 정보입니다. 파일을 자동으로 삭제하거나 이동하지 않습니다.
+• Android/data·Android/obb 등 시스템 보호 폴더는 Android 버전과 기기 정책에 따라 접근이 제한될 수 있습니다.
+• 중요한 파일은 정리 전에 별도로 백업하세요.
+        """.trimIndent()
+        val body = TextView(this).apply {
+            text = guideText
+            textSize = 15f
+            setTextColor(0xFFE3ECF7.toInt())
+            setPadding(20, 16, 20, 16)
+            setTextIsSelectable(true)
+        }
+        val scroll = ScrollView(this).apply {
+            addView(body)
+            setBackgroundColor(0xFF0B1220.toInt())
+        }
+        AlertDialog.Builder(this)
+            .setTitle("스마트 정리함 사용 설명서")
+            .setView(scroll)
+            .setPositiveButton("확인", null)
+            .show()
     }
 
     private fun updateStorageSummary() {
