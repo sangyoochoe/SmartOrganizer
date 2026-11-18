@@ -1374,39 +1374,45 @@ class MainActivity : Activity() {
     }
 
     private fun showLaunchableApps() {
-        setBusy(true, "실행 가능한 설치 앱을 조회 중입니다…")
+        setBusy(true, "설치 앱을 불러오는 중…")
         worker.execute {
             val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
             val apps = packageManager.queryIntentActivities(intent, 0)
                 .map { it.loadLabel(packageManager).toString() to it.activityInfo.packageName }
-                .distinctBy { it.second }
-                .sortedBy { it.first.lowercase() }
+                .distinctBy { it.second }.sortedBy { it.first.lowercase() }
             runOnUiThread {
                 results.removeAllViews()
-                summary.text = "실행 가능한 설치 앱 ${apps.size}개 · 자동 변경 없음"
-                val categories = apps.groupBy { (label, pkg) ->
-                    val key = (label + " " + pkg).lowercase()
-                    when {
-                        listOf("camera", "photo", "gallery", "카메라", "갤러리", "사진").any { key.contains(it) } -> "사진·카메라"
-                        listOf("game", "play", "게임").any { key.contains(it) } -> "게임·엔터테인먼트"
-                        listOf("mail", "calendar", "office", "문서", "메일", "캘린더").any { key.contains(it) } -> "업무·생산성"
-                        listOf("music", "audio", "video", "youtube", "음악", "동영상").any { key.contains(it) } -> "음악·동영상"
-                        listOf("map", "nav", "지도", "내비").any { key.contains(it) } -> "지도·이동"
-                        else -> "기타"
-                    }
-                }
-                categories.toSortedMap().forEach { (category, list) ->
-                    addLine("$category (${list.size})", true)
+                val prefs = getSharedPreferences("app_categories", MODE_PRIVATE)
+                val groups = apps.groupBy { (label, pkg) -> prefs.getString(pkg, null) ?: automaticAppCategory(label, pkg) }.toSortedMap()
+                summary.text = "설치 앱 ${apps.size}개 · SmartOrganizer 내부 앱 폴더"
+                addLine("앱 폴더 구성", true)
+                addLine("앱을 체크하고 폴더 이름을 입력하면 이 앱 안에서 폴더별로 묶어 관리합니다.")
+                addLine("삼성 One UI 홈 화면의 실제 폴더는 일반 앱이 직접 수정할 수 없어 자동 이동하지 않습니다.")
+                val selected = mutableSetOf<String>()
+                val selectedCount = TextView(this).apply { text = "선택한 앱: 0개"; textSize = 14f; setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 8, 8, 8) }
+                val folderName = EditText(this).apply { hint = "폴더 이름 (예: 쇼핑, 은행 및 카드)"; setSingleLine(true); setTextColor(0xFF172033.toInt()); setHintTextColor(0xFF68778C.toInt()) }
+                results.addView(selectedCount)
+                results.addView(folderName)
+                results.addView(Button(this).apply { text = "선택한 앱을 폴더에 묶기"; isAllCaps = false; setOnClickListener {
+                    val name = folderName.text.toString().trim()
+                    if (selected.isEmpty()) { toast("먼저 앱을 선택하세요."); return@setOnClickListener }
+                    if (name.isBlank()) { toast("폴더 이름을 입력하세요."); return@setOnClickListener }
+                    val edit = prefs.edit(); selected.forEach { edit.putString(it, name) }; edit.apply()
+                    recordOperation("앱 폴더 분류", selected.joinToString(","), name)
+                    toast("${selected.size}개 앱을 ‘$name’ 폴더로 분류했습니다. 삼성 홈 화면에는 자동 반영되지 않습니다.")
+                    showLaunchableApps()
+                } })
+                results.addView(Button(this).apply { text = "선택한 앱 자동 분류로 되돌리기"; isAllCaps = false; setOnClickListener {
+                    if (selected.isEmpty()) { toast("먼저 앱을 선택하세요."); return@setOnClickListener }
+                    val edit = prefs.edit(); selected.forEach { edit.remove(it) }; edit.apply(); showLaunchableApps()
+                } })
+                groups.forEach { (category, list) ->
+                    addLine("📁 $category · ${list.size}개", true)
                     list.forEach { (label, pkg) ->
-                        val line = TextView(this).apply {
-                            val custom = getSharedPreferences("app_categories", MODE_PRIVATE).getString(pkg, null)
-                            text = "📱 $label · $pkg" + if (custom != null) "  [$custom]" else ""
-                            textSize = 13f
-                            setPadding(8, 8, 4, 8)
-                            setOnClickListener { showAppDetails(label, pkg) }
-                            setOnLongClickListener { editAppCategory(label, pkg); true }
-                        }
-                        results.addView(line)
+                        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(4, 3, 4, 3); setBackgroundColor(0xFF111D2E.toInt()) }
+                        row.addView(CheckBox(this).apply { buttonTintList = android.content.res.ColorStateList.valueOf(0xFF70D6E5.toInt()); setOnCheckedChangeListener { _, checked -> if (checked) selected.add(pkg) else selected.remove(pkg); selectedCount.text = "선택한 앱: ${selected.size}개" } })
+                        row.addView(TextView(this).apply { text = "📱 $label"; textSize = 14f; setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 10, 8, 10); setOnClickListener { showAppDetails(label, pkg) }; setOnLongClickListener { editAppCategory(label, pkg); true } }, LinearLayout.LayoutParams(0, -2, 1f))
+                        results.addView(row)
                     }
                 }
                 setBusy(false)
@@ -1414,6 +1420,19 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun automaticAppCategory(label: String, packageName: String): String {
+        val key = (label + " " + packageName).lowercase()
+        return when {
+            listOf("camera", "photo", "gallery", "카메라", "갤러리", "사진").any { key.contains(it) } -> "사진·카메라"
+            listOf("bank", "pay", "finance", "은행", "카드", "금융", "증권").any { key.contains(it) } -> "은행 및 카드"
+            listOf("shop", "store", "market", "쇼핑", "쿠팡", "배달").any { key.contains(it) } -> "쇼핑"
+            listOf("game", "play", "게임").any { key.contains(it) } -> "게임·엔터테인먼트"
+            listOf("mail", "calendar", "office", "문서", "메일", "캘린더", "업무").any { key.contains(it) } -> "업무·생산성"
+            listOf("music", "audio", "video", "youtube", "음악", "동영상").any { key.contains(it) } -> "음악·동영상"
+            listOf("map", "nav", "지도", "내비").any { key.contains(it) } -> "지도·이동"
+            else -> "기타"
+        }
+    }
     private fun showAppDetails(label: String, packageName: String) {
         try {
             val info = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
