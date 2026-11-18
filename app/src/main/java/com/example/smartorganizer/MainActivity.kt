@@ -92,7 +92,7 @@ class MainActivity : Activity() {
             setTextColor(0xFF9FB2C9.toInt())
         }
         summary = TextView(this).apply {
-            text = "검사 전 · 분석할 폴더를 선택하거나 Download 전체 검사를 시작하세요."
+            text = "검사 전 · 내부 저장공간 전체 또는 원하는 폴더를 검사하세요."
             textSize = 14f; setTextColor(0xFFEAF4FF.toInt()); setPadding(16, 15, 16, 15)
             background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 20f }
         }
@@ -102,7 +102,7 @@ class MainActivity : Activity() {
         }
         scanButton = Button(this).apply { text = "＋ 스캔할 폴더 추가"; setOnClickListener { chooseFolder() }; setOnLongClickListener { showSelectedFolders(); true } }
         val downloadFolderButton = Button(this).apply { text = "⬇ Download 하위 폴더 선택"; setOnClickListener { chooseDownloadFolder() } }
-        fullStorageScanButton = Button(this).apply { text = "Download 전체 자동 검사"; setOnClickListener { chooseFullStorageRoot() } }
+        fullStorageScanButton = Button(this).apply { text = "내부 저장공간 전체 검사"; setOnClickListener { chooseFullStorageRoot() } }
         runScanButton = Button(this).apply { text = "선택한 폴더 모두 스캔 (0개)"; isEnabled = false; setOnClickListener { scanSelectedFolders() } }
         mediaScanButton = Button(this).apply { text = "사진 · 동영상 · 음악 검사"; setOnClickListener { requestMediaAccessAndScan() } }
         addFilesButton = Button(this).apply { text = "＋ 개별 파일 여러 개 추가"; setOnClickListener { chooseFiles() } }
@@ -329,53 +329,58 @@ class MainActivity : Activity() {
 
     private fun chooseFullStorageRoot() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) {
-            AlertDialog.Builder(this).setTitle("Download 전체 접근 권한")
-                .setMessage("Download 폴더와 모든 하위 폴더·파일을 자동 검사하려면 Android 설정에서 ‘모든 파일 접근’을 허용해야 합니다. 권한은 파일 검사에 사용하며 자동 삭제하지 않습니다.")
+            AlertDialog.Builder(this).setTitle("내부 저장공간 전체 접근 권한")
+                .setMessage("Download뿐 아니라 Documents, DCIM, Pictures, Movies, Music 및 사용자가 만든 모든 일반 폴더와 하위 폴더를 검사합니다. Android 시스템·앱 보호 영역은 접근이 제한될 수 있습니다. 검사만 수행하며 파일을 자동 이동·삭제하지 않습니다. Android 설정에서 ‘모든 파일 접근’을 허용해 주세요.")
                 .setNegativeButton("취소", null).setPositiveButton("설정 열기") { _, _ ->
                     try { startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:" + packageName))) }
                     catch (_: Exception) { startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) }
                 }.show()
-        } else scanDownloadWithAllFilesAccess()
+        } else scanAllAccessibleStorage()
     }
 
     override fun onResume() {
         super.onResume()
         if (::storageSummary.isInitialized) updateStorageSummary()
         if (::fullStorageScanButton.isInitialized && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            fullStorageScanButton.text = if (Environment.isExternalStorageManager()) "⬇ Download 전체 다시 검사 (권한 허용됨)" else "⬇ Download 전체 검사 (모든 파일 접근 권한 필요)"
+            fullStorageScanButton.text = if (Environment.isExternalStorageManager()) "⬇ 내부 저장공간 전체 다시 검사 (권한 허용됨)" else "⬇ 내부 저장공간 전체 검사 (모든 파일 접근 권한 필요)"
         }
     }
 
-    private fun scanDownloadWithAllFilesAccess() {
+    private fun scanAllAccessibleStorage() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !Environment.isExternalStorageManager()) { chooseFullStorageRoot(); return }
-        val download = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        setBusy(true, "Download 전체와 모든 하위 폴더를 검사 중입니다…")
+        val root = Environment.getExternalStorageDirectory()
+        setBusy(true, "내부 저장공간 전체 폴더와 하위 폴더를 검사 중입니다…")
         worker.execute {
             val found = mutableListOf<Entry>()
             var inaccessible = 0
             var truncated = false
             val queue = java.util.ArrayDeque<File>()
-            if (download.isDirectory && download.canRead()) queue.add(download) else inaccessible++
+            if (root.isDirectory && root.canRead()) queue.add(root) else inaccessible++
+            val visited = hashSetOf<String>()
             while (queue.isNotEmpty() && !truncated) {
                 val dir = queue.removeFirst()
+                val canonical = try { dir.canonicalPath } catch (_: Exception) { dir.absolutePath }
+                if (!visited.add(canonical)) continue
                 val children = try { dir.listFiles() ?: emptyArray() } catch (_: Exception) { inaccessible++; emptyArray() }
                 for (child in children) {
                     if (found.size >= MAX_SCAN_ENTRIES) { truncated = true; break }
-                    val relative = child.absolutePath.removePrefix(download.absolutePath).trimStart(File.separatorChar)
-                    found.add(Entry(child.name, "Download/" + relative, if (child.isFile) child.length().coerceAtLeast(0L) else 0L, child.lastModified(), Uri.fromFile(child), child.isDirectory))
-                    if (child.isDirectory && child.canRead()) queue.add(child) else if (child.isDirectory) inaccessible++
+                    val relative = child.absolutePath.removePrefix(root.absolutePath).trimStart(File.separatorChar)
+                    val displayPath = if (relative.isBlank()) child.name else relative
+                    val isDirectory = child.isDirectory
+                    found.add(Entry(child.name, displayPath, if (child.isFile) child.length().coerceAtLeast(0L) else 0L, child.lastModified(), Uri.fromFile(child), isDirectory))
+                    if (isDirectory && child.canRead()) queue.add(child) else if (isDirectory) inaccessible++
                 }
             }
             runOnUiThread {
                 entries.clear(); entries.addAll(found); checkedEntries.clear()
                 val files = found.filter { !it.directory }
-                summary.text = "Download 전체 검사 완료 · 파일 " + files.size + "개 · 하위 폴더 " + found.count { it.directory } + "개 · " + humanSize(files.sumOf { it.size }) +
-                    (if (inaccessible > 0) "\n읽기 제한 위치 " + inaccessible + "곳" else "") +
-                    (if (truncated) "\n안전 제한: " + MAX_SCAN_ENTRIES + "개 항목까지만 검사했습니다." else "")
+                summary.text = "내부 저장공간 전체 검사 완료 · 파일 ${files.size}개 · 폴더 ${found.count { it.directory }}개 · ${humanSize(files.sumOf { it.size })}" +
+                    (if (inaccessible > 0) "\\n읽기 제한 위치 ${inaccessible}곳 (Android 보호 폴더 등)" else "") +
+                    (if (truncated) "\\n안전 제한: ${MAX_SCAN_ENTRIES}개 항목까지만 검사했습니다." else "")
                 duplicateButton.isEnabled = files.isNotEmpty(); insightButton.isEnabled = files.isNotEmpty(); classifyButton.isEnabled = files.isNotEmpty()
                 contentAuditButton.isEnabled = files.isNotEmpty(); apkButton.isEnabled = files.isNotEmpty()
                 archiveButton.isEnabled = files.any { it.name.endsWith(".zip", true) }
-                renderEntries(found); setBusy(false); toast("Download 전체에서 " + files.size + "개 파일을 찾았습니다.")
+                renderEntries(found); setBusy(false); toast("접근 가능한 내부 저장공간 전체에서 ${files.size}개 파일을 찾았습니다.")
             }
         }
     }
