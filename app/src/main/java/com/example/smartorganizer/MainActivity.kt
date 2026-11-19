@@ -873,22 +873,58 @@ class MainActivity : Activity() {
     private fun showOrganizationInsights() {
         val files = entries.filter { !it.directory }
         if (files.isEmpty()) { toast("먼저 저장공간을 검사하세요."); return }
-        val large = files.count { it.size >= LARGE_FILE_BYTES }
-        val now = System.currentTimeMillis()
-        val old = files.count { it.modified > 0L && now - it.modified >= OLD_FILE_AGE }
-        val sameName = files.groupBy { it.name.lowercase(java.util.Locale.ROOT) }.values.count { it.size > 1 }
-        val apk = files.count { it.name.endsWith(".apk", true) }
-        val zip = files.count { it.name.endsWith(".zip", true) }
         results.removeAllViews()
-        addLine("점검 요약", true)
-        addLine("검사한 파일: " + files.size + "개")
-        addLine("큰 파일 (100MB 이상): " + large + "개")
-        addLine("오래된 파일 (180일 이상): " + old + "개")
-        addLine("이름이 같은 파일 묶음: " + sameName + "개")
-        addLine("APK: " + apk + "개 · ZIP: " + zip + "개")
-        addLine("위 항목은 확인할 후보일 뿐, 불필요하거나 위험하다는 판정이 아닙니다.")
-        addLine("파일을 선택하면 이동·이름 변경·삭제를 직접 할 수 있습니다.")
-        summary.text = "간단 점검 완료 · 자동 이동/삭제 없음"
+        addLine("파일 정리 그룹", true)
+        addLine("그룹을 열고 필요한 파일만 선택하세요. 삭제와 이동은 선택한 항목에만 적용됩니다.")
+        val now = System.currentTimeMillis()
+        val groups = linkedMapOf<String, List<Entry>>()
+        val duplicateGroups = files.groupBy { it.name.lowercase(java.util.Locale.ROOT) }.values.filter { it.size > 1 }
+        groups["중복 이름 파일 · ${duplicateGroups.sumOf { it.size }}개"] = duplicateGroups.flatten().distinctBy { it.uri.toString() }
+        groups["대용량 파일 · ${files.count { it.size >= LARGE_FILE_BYTES }}개"] = files.filter { it.size >= LARGE_FILE_BYTES }.sortedByDescending { it.size }
+        groups["오래된 파일 · ${files.count { it.modified > 0L && now - it.modified >= OLD_FILE_AGE }}개"] = files.filter { it.modified > 0L && now - it.modified >= OLD_FILE_AGE }.sortedBy { it.modified }
+        groups["APK 설치 파일 · ${files.count { it.name.endsWith(".apk", true) }}개"] = files.filter { it.name.endsWith(".apk", true) }
+        groups["ZIP 압축 파일 · ${files.count { it.name.endsWith(".zip", true) }}개"] = files.filter { it.name.endsWith(".zip", true) }
+        groups.forEach { (title, groupFiles) ->
+            if (groupFiles.isEmpty()) return@forEach
+            val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 6, 8, 8); background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 14f * resources.displayMetrics.density } }
+            val header = TextView(this).apply { text = "▶ $title"; textSize = 15f; setTextColor(0xFF70D6E5.toInt()); typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(10, 12, 10, 12) }
+            val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = android.view.View.GONE }
+            val selected = linkedMapOf<String, Entry>()
+            val count = TextView(this).apply { text = "선택 0개"; textSize = 13f; setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 8, 8, 8) }
+            val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            val selectAll = Button(this).apply { text = "전체 선택"; isAllCaps = false; setOnClickListener { groupFiles.forEach { selected[it.uri.toString()] = it }; count.text = "선택 ${selected.size}개"; body.findViewsWithText(mutableListOf<android.view.View>(), "", android.view.View.FIND_VIEWS_WITH_TEXT) } }
+            val delete = Button(this).apply { text = "선택 삭제"; isAllCaps = false; setOnClickListener { if (selected.isEmpty()) toast("삭제할 파일을 선택하세요.") else confirmDeleteGroup(selected.values.toList()) } }
+            val move = Button(this).apply { text = "선택 이동·분류"; isAllCaps = false; setOnClickListener { if (selected.isEmpty()) toast("이동할 파일을 선택하세요.") else chooseBatchMoveDestination(selected.values.toList()) } }
+            actions.addView(selectAll, LinearLayout.LayoutParams(0, -2, 1f)); actions.addView(delete, LinearLayout.LayoutParams(0, -2, 1f)); actions.addView(move, LinearLayout.LayoutParams(0, -2, 1f))
+            body.addView(count); body.addView(actions)
+            groupFiles.take(1500).forEach { entry ->
+                val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(4, 2, 4, 2) }
+                val check = CheckBox(this).apply { buttonTintList = android.content.res.ColorStateList.valueOf(0xFF70D6E5.toInt()); setOnCheckedChangeListener { _, checked -> if (checked) selected[entry.uri.toString()] = entry else selected.remove(entry.uri.toString()); count.text = "選択 ${selected.size}개" } }
+                row.addView(check)
+                row.addView(TextView(this).apply { text = "${entry.relativePath} · ${humanSize(entry.size)}"; textSize = 12f; setTextColor(0xFFE3ECF7.toInt()); setPadding(6, 8, 4, 8); setOnClickListener { showFileActions(entry) } }, LinearLayout.LayoutParams(0, -2, 1f))
+                body.addView(row)
+            }
+            if (groupFiles.size > 1500) body.addView(TextView(this).apply { text = "표시 제한: 1,500개"; setTextColor(0xFFE3ECF7.toInt()) })
+            header.setOnClickListener { val open = body.visibility != android.view.View.VISIBLE; body.visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE; header.text = (if (open) "▼ " else "▶ ") + title }
+            card.addView(header); card.addView(body); results.addView(card)
+        }
+        summary.text = "파일 그룹 ${groups.values.count { it.isNotEmpty() }}개 · 파일 ${files.size}개 · 자동 삭제/이동 없음"
+    }
+
+    private fun confirmDeleteGroup(chosen: List<Entry>) {
+        if (getSharedPreferences("quick_actions", MODE_PRIVATE).getBoolean("safe_mode", false)) { toast("안전 정리 모드가 켜져 있어 일괄 삭제가 차단되었습니다."); return }
+        AlertDialog.Builder(this).setTitle("${chosen.size}개 파일 삭제")
+            .setMessage("선택한 파일만 삭제합니다. 되돌릴 수 없습니다. 계속할까요?")
+            .setNegativeButton("취소", null).setPositiveButton("삭제") { _, _ ->
+                var success = 0
+                chosen.forEach { entry -> if (try { deleteEntry(entry.uri) } catch (_: Exception) { false }) { success++; recordOperation("그룹 삭제", entry.relativePath, "삭제 완료") } }
+                toast("${success}/${chosen.size}개 파일 삭제 완료")
+                showOrganizationInsightsAfterDelete()
+            }.show()
+    }
+
+    private fun showOrganizationInsightsAfterDelete() {
+        if (selectedTrees.isNotEmpty() || selectedLooseFiles.isNotEmpty()) scanSelectedFolders() else showOrganizationInsights()
     }
     private fun addEntryLine(entry: Entry) {
         val line = TextView(this).apply {
