@@ -1413,8 +1413,8 @@ class MainActivity : Activity() {
                     summary.text = "내용이 완전히 같은 중복 파일 그룹 ${duplicates.size}개 · 최신 수정 파일을 보존 후보로 표시합니다. 자동 삭제는 하지 않습니다."
                     duplicates.forEachIndexed { index, group ->
                         val newestModified = group.maxOfOrNull { it.modified } ?: 0L
-                        val keepers = group.filter { it.modified == newestModified }
-                        val deleteCandidates = group.filter { it.modified < newestModified }
+                        val keepers = group.filter { it.modified == newestModified || it.modified <= 0L }
+                        val deleteCandidates = group.filter { it.modified > 0L && it.modified < newestModified }
                         addLine("중복 그룹 ${index + 1} · ${group.size}개", true)
                         if (newestModified > 0L) {
                             addLine("보존 후보: 최신 수정일 ${formatDate(newestModified)}")
