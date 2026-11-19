@@ -927,7 +927,7 @@ class MainActivity : Activity() {
             val selected = linkedMapOf<String, Entry>()
             val count = TextView(this).apply { text = "선택 0개"; textSize = 13f; setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 8, 8, 8) }
             val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            val selectAll = Button(this).apply { text = "전체 선택"; isAllCaps = false; setOnClickListener { groupFiles.forEach { selected[it.uri.toString()] = it }; count.text = "선택 ${selected.size}개"; body.findViewsWithText(mutableListOf<android.view.View>(), "", android.view.View.FIND_VIEWS_WITH_TEXT) } }
+            val selectAll = Button(this).apply { text = "전체 선택"; isAllCaps = false; setOnClickListener { groupFiles.forEach { selected[it.uri.toString()] = it }; count.text = "선택 ${selected.size}개"; /* selection rows are updated by individual checkboxes */ } }
             val delete = Button(this).apply { text = "선택 삭제"; isAllCaps = false; setOnClickListener { if (selected.isEmpty()) toast("삭제할 파일을 선택하세요.") else confirmDeleteGroup(selected.values.toList()) } }
             val move = Button(this).apply { text = "선택 이동·분류"; isAllCaps = false; setOnClickListener { if (selected.isEmpty()) toast("이동할 파일을 선택하세요.") else chooseBatchMoveDestination(selected.values.toList()) } }
             actions.addView(selectAll, LinearLayout.LayoutParams(0, -2, 1f)); actions.addView(delete, LinearLayout.LayoutParams(0, -2, 1f)); actions.addView(move, LinearLayout.LayoutParams(0, -2, 1f))
