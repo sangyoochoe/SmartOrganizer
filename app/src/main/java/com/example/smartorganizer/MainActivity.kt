@@ -1410,10 +1410,30 @@ class MainActivity : Activity() {
                     summary.text = "검사 가능한 파일에서 동일 내용의 중복 파일을 찾지 못했습니다."
                     addLine("완전 중복 파일 없음")
                 } else {
-                    summary.text = "내용이 완전히 같은 중복 파일 그룹 ${duplicates.size}개 · 자동 삭제하지 않았습니다."
+                    summary.text = "내용이 완전히 같은 중복 파일 그룹 ${duplicates.size}개 · 최신 수정 파일을 보존 후보로 표시합니다. 자동 삭제는 하지 않습니다."
                     duplicates.forEachIndexed { index, group ->
-                        addLine("중복 그룹 ${index + 1}", true)
-                        group.forEach { addEntryLine(it) }
+                        val newestModified = group.maxOfOrNull { it.modified } ?: 0L
+                        val keepers = group.filter { it.modified == newestModified }
+                        val deleteCandidates = group.filter { it.modified < newestModified }
+                        addLine("중복 그룹 ${index + 1} · ${group.size}개", true)
+                        if (newestModified > 0L) {
+                            addLine("보존 후보: 최신 수정일 ${formatDate(newestModified)}")
+                        } else {
+                            addLine("보존 후보: 수정 날짜를 알 수 없어 자동 선정하지 않았습니다.")
+                        }
+                        keepers.forEach { entry ->
+                            addLine("✓ 보존 후보 · ${entry.relativePath}")
+                            addLine("  크기 ${humanSize(entry.size)} · 수정 ${formatDate(entry.modified)}")
+                        }
+                        if (deleteCandidates.isNotEmpty()) {
+                            addLine("삭제 후보 · ${deleteCandidates.size}개 (사용자 확인 필요)")
+                            deleteCandidates.forEach { entry ->
+                                addLine("  삭제 후보 · ${entry.relativePath}")
+                                addLine("  크기 ${humanSize(entry.size)} · 수정 ${formatDate(entry.modified)}")
+                            }
+                        } else if (keepers.size > 1) {
+                            addLine("최신 수정 날짜가 같아 여러 파일을 보존 후보로 남겼습니다.")
+                        }
                     }
                 }
                 setBusy(false)
