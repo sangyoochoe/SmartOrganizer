@@ -893,12 +893,12 @@ class MainActivity : Activity() {
         worker.execute {
             try {
                 contentResolver.openOutputStream(uri, "wt")?.bufferedWriter(Charsets.UTF_8)?.use { out ->
-                    out.write("파일명,전체경로,종류,크기(bytes),수정일\\n")
+                    out.write("파일명,전체경로,종류,크기(bytes),수정일\n")
                     snapshot.forEach { entry ->
                         val kind = if (entry.directory) "폴더" else entry.name.substringAfterLast(".", "파일").uppercase()
                         val values = listOf(entry.name, entry.relativePath, kind, if (entry.directory) "" else entry.size.toString(), formatDate(entry.modified))
-                        out.write(values.joinToString(",") { "\\\"" + it.replace("\\\"", "\\\"\\\"") + "\\\"" })
-                        out.write("\\n")
+                        out.write(values.joinToString(",") { "\"" + it.replace("\"", "\"\"") + "\"" })
+                        out.write("\n")
                     }
                 } ?: throw IllegalStateException("파일을 저장할 수 없습니다.")
                 runOnUiThread { toast("파일 목록 ${snapshot.size}개를 CSV로 저장했습니다.") }
