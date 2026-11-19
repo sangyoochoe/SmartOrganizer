@@ -156,7 +156,8 @@ class MainActivity : Activity() {
         }
         outer.addView(title); outer.addView(subtitle); outer.addView(summary); outer.addView(storageSummary)
         addSection("파일 정리", listOf(fullStorageScanButton, mediaScanButton, scanButton, downloadFolderButton, runScanButton, addFilesButton, bulkDeleteButton, manageFoldersButton))
-        addSection("분석 도구", listOf(versionManagerButton, duplicateButton, insightButton, classifyButton, contentAuditButton, apkButton, archiveButton, historyButton, helpButton))
+        val quickReviewButton = Button(this).apply { text = "한눈에 점검"; isEnabled = false; setOnClickListener { showOrganizationInsights() } }
+        addSection("간단 점검", listOf(quickReviewButton, versionManagerButton, historyButton, helpButton))
         addSection("앱 관리", listOf(appsButton))
         addSection("꾸미기", listOf(wallpaperButton, launcherButton, sailorMoonButton, cyberDashboardButton, desktopStudioButton, widgetStudioButton))
         outer.addView(TextView(this).apply {
@@ -871,28 +872,24 @@ class MainActivity : Activity() {
 
     private fun showOrganizationInsights() {
         val files = entries.filter { !it.directory }
-        if (files.isEmpty()) { toast("먼저 저장소를 스캔하세요."); return }
+        if (files.isEmpty()) { toast("먼저 저장공간을 검사하세요."); return }
+        val large = files.count { it.size >= LARGE_FILE_BYTES }
         val now = System.currentTimeMillis()
-        val large = files.filter { it.size >= LARGE_FILE_BYTES }.sortedByDescending { it.size }.take(30)
-        val old = files.filter { it.modified > 0L && now - it.modified >= OLD_FILE_AGE }.sortedBy { it.modified }.take(30)
-        val duplicateNames = files.groupBy { it.name.lowercase(java.util.Locale.ROOT) }
-            .filterValues { it.size > 1 }
+        val old = files.count { it.modified > 0L && now - it.modified >= OLD_FILE_AGE }
+        val sameName = files.groupBy { it.name.lowercase(java.util.Locale.ROOT) }.values.count { it.size > 1 }
+        val apk = files.count { it.name.endsWith(".apk", true) }
+        val zip = files.count { it.name.endsWith(".zip", true) }
         results.removeAllViews()
-        addLine("정리 후보 분석", true)
-        addLine("대용량 파일 (100MB 이상) · ${large.size}개", true)
-        if (large.isEmpty()) addLine("해당 파일이 없습니다.")
-        large.forEach { addLine("${it.relativePath} · ${humanSize(it.size)}") }
-        addLine("오래된 파일 (180일 이상) · ${old.size}개", true)
-        if (old.isEmpty()) addLine("해당 파일이 없습니다.")
-        old.forEach { addLine("${it.relativePath} · ${formatDate(it.modified)}") }
-        addLine("이름이 같은 파일 그룹 · ${duplicateNames.size}개", true)
-        duplicateNames.entries.sortedByDescending { it.value.size }.take(50).forEach { (name, group) ->
-            addLine("$name · ${group.size}개")
-            group.take(5).forEach { addLine("  ${it.relativePath}") }
-        }
-        summary.text = "정리 후보 분석 완료 · 삭제는 사용자가 파일별로 직접 선택해야 합니다."
+        addLine("점검 요약", true)
+        addLine("검사한 파일: " + files.size + "개")
+        addLine("큰 파일 (100MB 이상): " + large + "개")
+        addLine("오래된 파일 (180일 이상): " + old + "개")
+        addLine("이름이 같은 파일 묶음: " + sameName + "개")
+        addLine("APK: " + apk + "개 · ZIP: " + zip + "개")
+        addLine("위 항목은 확인할 후보일 뿐, 불필요하거나 위험하다는 판정이 아닙니다.")
+        addLine("파일을 선택하면 이동·이름 변경·삭제를 직접 할 수 있습니다.")
+        summary.text = "간단 점검 완료 · 자동 이동/삭제 없음"
     }
-
     private fun addEntryLine(entry: Entry) {
         val line = TextView(this).apply {
             text = "• ${entry.relativePath} · ${humanSize(entry.size)}"
