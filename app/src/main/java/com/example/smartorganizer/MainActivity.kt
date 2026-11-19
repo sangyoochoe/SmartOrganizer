@@ -54,6 +54,7 @@ class MainActivity : Activity() {
     private lateinit var archiveButton: Button
     private lateinit var versionManagerButton: Button
     private lateinit var historyButton: Button
+    private lateinit var exportListButton: Button
     private lateinit var launcherButton: Button
     private lateinit var wallpaperButton: Button
     private var pendingMoveEntry: Entry? = null
@@ -157,7 +158,8 @@ class MainActivity : Activity() {
         outer.addView(title); outer.addView(subtitle); outer.addView(summary); outer.addView(storageSummary)
         addSection("파일 정리", listOf(fullStorageScanButton, mediaScanButton, scanButton, downloadFolderButton, runScanButton, addFilesButton, bulkDeleteButton, manageFoldersButton))
         val quickReviewButton = Button(this).apply { text = "한눈에 점검"; isEnabled = true; setOnClickListener { showOrganizationInsights() } }
-        addSection("간단 점검", listOf(quickReviewButton, versionManagerButton, historyButton, helpButton))
+        exportListButton = Button(this).apply { text = "파일 목록 내보내기"; isEnabled = false; setOnClickListener { exportFileList() } }
+        addSection("간단 점검", listOf(quickReviewButton, exportListButton, versionManagerButton, historyButton, helpButton))
         addSection("앱 관리", listOf(appsButton))
         addSection("꾸미기", listOf(wallpaperButton, launcherButton, sailorMoonButton, cyberDashboardButton, desktopStudioButton, widgetStudioButton))
         outer.addView(TextView(this).apply {
@@ -446,6 +448,11 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (resultCode != RESULT_OK) return
+        if (requestCode == REQUEST_EXPORT_LIST) {
+            val uri = data?.data ?: return
+            exportFileListTo(uri)
+            return
+        }
         if (requestCode == REQUEST_MOVE_DESTINATION) {
             val source = pendingMoveEntry
             pendingMoveEntry = null
@@ -870,6 +877,34 @@ class MainActivity : Activity() {
         summary.text = "버전 그룹 ${versionGroups.size}개 · 프로젝트 폴더 그룹 ${projectGroups.size}개 · 선택 후 하단 ‘선택 파일 일괄 삭제’ 또는 파일 메뉴에서 이동 가능"
     }
 
+    private fun exportFileList() {
+        val snapshot = entries.toList()
+        if (snapshot.isEmpty()) { toast("먼저 저장공간을 검사하세요."); return }
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "text/csv"
+            putExtra(Intent.EXTRA_TITLE, "SmartOrganizer_파일목록.csv")
+        }
+        startActivityForResult(intent, REQUEST_EXPORT_LIST)
+    }
+
+    private fun exportFileListTo(uri: Uri) {
+        val snapshot = entries.toList()
+        worker.execute {
+            try {
+                contentResolver.openOutputStream(uri, "wt")?.bufferedWriter(Charsets.UTF_8)?.use { out ->
+                    out.write("파일명,전체경로,종류,크기(bytes),수정일\\n")
+                    snapshot.forEach { entry ->
+                        val kind = if (entry.directory) "폴더" else entry.name.substringAfterLast(".", "파일").uppercase()
+                        val values = listOf(entry.name, entry.relativePath, kind, if (entry.directory) "" else entry.size.toString(), formatDate(entry.modified))
+                        out.write(values.joinToString(",") { "\\\"" + it.replace("\\\"", "\\\"\\\"") + "\\\"" })
+                        out.write("\\n")
+                    }
+                } ?: throw IllegalStateException("파일을 저장할 수 없습니다.")
+                runOnUiThread { toast("파일 목록 ${snapshot.size}개를 CSV로 저장했습니다.") }
+            } catch (e: Exception) { runOnUiThread { toast("목록 저장 실패: ${e.message ?: "오류"}") } }
+        }
+    }
     private fun showOrganizationInsights() {
         val files = entries.filter { !it.directory }
         if (files.isEmpty()) { toast("먼저 저장공간을 검사하세요."); return }
@@ -1596,6 +1631,7 @@ class MainActivity : Activity() {
         apkButton.isEnabled = !busy && entries.any { !it.directory }
         archiveButton.isEnabled = !busy && entries.any { !it.directory && it.name.endsWith(".zip", true) }
         versionManagerButton.isEnabled = !busy && entries.any { !it.directory }
+        exportListButton.isEnabled = !busy && entries.isNotEmpty()
         appsButton.isEnabled = !busy
     }
 
@@ -1624,6 +1660,7 @@ class MainActivity : Activity() {
         private const val REQUEST_FILES = 7102
         private const val REQUEST_FULL_TREE = 7103
         private const val REQUEST_MOVE_DESTINATION = 7104
+        private const val REQUEST_EXPORT_LIST = 7106
         private const val MAX_SCAN_ENTRIES = 100000
         private const val LARGE_FILE_BYTES = 100L * 1024L * 1024L
         private const val OLD_FILE_AGE = 180L * 24L * 60L * 60L * 1000L
