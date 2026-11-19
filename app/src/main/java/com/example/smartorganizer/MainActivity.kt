@@ -156,7 +156,7 @@ class MainActivity : Activity() {
         }
         outer.addView(title); outer.addView(subtitle); outer.addView(summary); outer.addView(storageSummary)
         addSection("파일 정리", listOf(fullStorageScanButton, mediaScanButton, scanButton, downloadFolderButton, runScanButton, addFilesButton, bulkDeleteButton, manageFoldersButton))
-        val quickReviewButton = Button(this).apply { text = "한눈에 점검"; isEnabled = false; setOnClickListener { showOrganizationInsights() } }
+        val quickReviewButton = Button(this).apply { text = "한눈에 점검"; isEnabled = true; setOnClickListener { showOrganizationInsights() } }
         addSection("간단 점검", listOf(quickReviewButton, versionManagerButton, historyButton, helpButton))
         addSection("앱 관리", listOf(appsButton))
         addSection("꾸미기", listOf(wallpaperButton, launcherButton, sailorMoonButton, cyberDashboardButton, desktopStudioButton, widgetStudioButton))
