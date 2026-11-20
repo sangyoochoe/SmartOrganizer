@@ -1041,6 +1041,21 @@ class MainActivity : Activity() {
             }.show()
     }
 
+    // Compare full file contents, not only byte counts, before offering source deletion.
+    private fun sha256Uri(uri: Uri): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val input = openEntryInputStream(uri) ?: throw IllegalStateException("파일을 읽을 수 없습니다.")
+        input.use {
+            val buffer = ByteArray(64 * 1024)
+            while (true) {
+                val count = it.read(buffer)
+                if (count < 0) break
+                digest.update(buffer, 0, count)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
     private fun copyBatchThenOfferMove(files: List<Entry>, destinationUri: Uri, groupFolderName: String? = null) {
         val selectedDestination = DocumentFile.fromTreeUri(this, destinationUri)
         if (selectedDestination == null || !selectedDestination.isDirectory || !selectedDestination.canWrite()) {
@@ -1087,6 +1102,8 @@ class MainActivity : Activity() {
                     }
                     if (bytes != entry.size || output.length() != entry.size)
                         throw IllegalStateException("크기 검증 실패")
+                    if (sha256Uri(entry.uri) != sha256Uri(output.uri))
+                        throw IllegalStateException("SHA-256 내용 검증 실패")
                     copied.add(entry to output)
                 } catch (e: Exception) {
                     try { output?.delete() } catch (_: Exception) {}
@@ -1159,6 +1176,7 @@ class MainActivity : Activity() {
                     }
                 }
                 if (bytes != entry.size || output.length() != entry.size) throw IllegalStateException("원본과 복사본 크기가 일치하지 않습니다.")
+                if (sha256Uri(entry.uri) != sha256Uri(output.uri)) throw IllegalStateException("SHA-256 내용 검증에 실패했습니다.")
             } catch (e: Exception) {
                 try { output.delete() } catch (_: Exception) {}
                 runOnUiThread { setBusy(false); toast("복사 실패: " + (e.localizedMessage ?: "파일 접근 오류")) }
