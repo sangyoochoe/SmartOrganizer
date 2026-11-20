@@ -841,6 +841,18 @@ class MainActivity : Activity() {
             .filter { (_, group) -> group.size >= 3 }
             .toSortedMap()
         addLine("프로젝트·폴더 단위 파일 그룹 · ${projectGroups.size}개", true)
+        val projectRoot = inferProjectRoot(projectGroups.keys)
+        val wholeProjectFiles = if (projectRoot == null) emptyList() else files.filter {
+            it.relativePath.replace('\\\\', '/').startsWith("$projectRoot/")
+        }
+        if (wholeProjectFiles.isNotEmpty()) {
+            addLine("전체 프로젝트 복사 기준 경로: $projectRoot")
+            results.addView(Button(this).apply {
+                text = "🛡 전체 프로젝트 안전 복사 · ${wholeProjectFiles.size}개 파일"
+                isAllCaps = false
+                setOnClickListener { chooseWholeProjectCopy(wholeProjectFiles, projectRoot) }
+            })
+        }
         addLine("같은 폴더에 있는 파일을 프로젝트 후보로 묶습니다. 서로 다른 파일의 최신 여부는 자동 판정하지 않습니다.")
         projectGroups.forEach { (folder, group) ->
             val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -875,6 +887,108 @@ class MainActivity : Activity() {
             box.addView(toggle); box.addView(moveGroup); box.addView(detail); results.addView(box)
         }
         summary.text = "버전 그룹 ${versionGroups.size}개 · 프로젝트 폴더 그룹 ${projectGroups.size}개 · 선택 후 하단 ‘선택 파일 일괄 삭제’ 또는 파일 메뉴에서 이동 가능"
+    }
+
+    private fun inferProjectRoot(folderPaths: Set<String>): String? {
+        val paths = folderPaths.filter { it != "(최상위 폴더)" }
+            .map { it.replace('\\\\', '/').split('/').filter { part -> part.isNotBlank() } }
+        if (paths.isEmpty()) return null
+        val extractedIndex = paths.first().indexOfFirst { it.equals("extracted", true) }
+        if (extractedIndex >= 0) {
+            val candidate = paths.first().take(extractedIndex + 2)
+            if (candidate.isNotEmpty() && paths.all { it.size >= candidate.size && it.take(candidate.size) == candidate }) {
+                return candidate.joinToString("/")
+            }
+        }
+        val common = mutableListOf<String>()
+        for (index in 0 until (paths.minOfOrNull { it.size } ?: 0)) {
+            val part = paths.first()[index]
+            if (paths.all { it[index] == part }) common.add(part) else break
+        }
+        return common.takeIf { it.isNotEmpty() }?.joinToString("/")
+    }
+
+    private fun chooseWholeProjectCopy(files: List<Entry>, projectRoot: String) {
+        val safeFiles = files.filter { !isProtectedPath(it) }
+        if (safeFiles.isEmpty()) { toast("보호 경로를 제외하면 복사할 파일이 없습니다."); return }
+        AlertDialog.Builder(this)
+            .setTitle("전체 프로젝트 안전 복사")
+            .setMessage("프로젝트 경로: $projectRoot\\n파일: ${safeFiles.size}개\\n\\n폴더 구조를 유지해 새 위치에 복사하고 모든 파일의 SHA-256을 비교합니다. 원본 파일과 원본 폴더는 삭제하거나 변경하지 않습니다.")
+            .setNegativeButton("취소", null)
+            .setPositiveButton("복사 위치 선택") { _, _ ->
+                pendingBatchMoveEntries = safeFiles
+                pendingBatchMoveFolderName = projectRoot.substringAfterLast("/").ifBlank { "프로젝트" }
+                val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
+                }
+                startActivityForResult(intent, REQUEST_MOVE_DESTINATION)
+            }.show()
+    }
+
+    private fun copyWholeProjectPreservingTree(files: List<Entry>, destinationUri: Uri, projectRoot: String) {
+        val selectedDestination = DocumentFile.fromTreeUri(this, destinationUri)
+        if (selectedDestination == null || !selectedDestination.isDirectory || !selectedDestination.canWrite()) {
+            toast("선택한 목적지에 쓸 수 없습니다."); return
+        }
+        val rootName = projectRoot.substringAfterLast("/").ifBlank { "프로젝트" }
+        val rootFolder = selectedDestination.findFile(rootName)?.takeIf { it.isDirectory }
+            ?: selectedDestination.createDirectory(rootName)
+        if (rootFolder == null || !rootFolder.isDirectory || !rootFolder.canWrite()) {
+            toast("프로젝트 폴더를 만들 수 없습니다. 같은 이름의 파일이 있는지 확인하세요."); return
+        }
+        setBusy(true, "전체 프로젝트를 원본 보존 방식으로 복사·검증 중입니다…")
+        worker.execute {
+            var copied = 0
+            val failures = mutableListOf<String>()
+            val createdFiles = mutableListOf<DocumentFile>()
+            val rootPrefix = "$projectRoot/"
+            for (entry in files) {
+                var output: DocumentFile? = null
+                try {
+                    if (!entry.relativePath.startsWith(rootPrefix)) throw IllegalStateException("프로젝트 기준 경로 밖의 파일")
+                    val relative = entry.relativePath.removePrefix(rootPrefix).split('/').filter { it.isNotBlank() }
+                    if (relative.isEmpty() || relative.any { it == "." || it == ".." || it.contains('\\\\') })
+                        throw IllegalStateException("안전하지 않은 상대 경로")
+                    var parent = rootFolder
+                    for (part in relative.dropLast(1)) {
+                        parent = parent.findFile(part)?.takeIf { it.isDirectory } ?: parent.createDirectory(part)
+                            ?: throw IllegalStateException("하위 폴더 생성 실패: $part")
+                    }
+                    val fileName = relative.last()
+                    if (parent.findFile(fileName) != null) throw IllegalStateException("목적지에 같은 이름이 이미 존재")
+                    output = parent.createFile(contentResolver.getType(entry.uri) ?: "application/octet-stream", fileName)
+                        ?: throw IllegalStateException("파일 생성 실패")
+                    openEntryInputStream(entry.uri).use { input ->
+                        if (input == null) throw IllegalStateException("원본 읽기 실패")
+                        contentResolver.openOutputStream(output.uri, "w").use { out ->
+                            if (out == null) throw IllegalStateException("목적지 쓰기 실패")
+                            val buffer = ByteArray(64 * 1024)
+                            while (true) {
+                                val count = input.read(buffer)
+                                if (count < 0) break
+                                out.write(buffer, 0, count)
+                            }
+                            out.flush()
+                        }
+                    }
+                    if (output.length() != entry.size) throw IllegalStateException("파일 크기 검증 실패")
+                    if (sha256Uri(entry.uri) != sha256Uri(output.uri)) throw IllegalStateException("SHA-256 검증 실패")
+                    createdFiles.add(output)
+                    copied++
+                } catch (e: Exception) {
+                    try { output?.delete() } catch (_: Exception) {}
+                    failures.add("${entry.relativePath}: ${e.localizedMessage ?: "복사 실패"}")
+                }
+            }
+            runOnUiThread {
+                setBusy(false)
+                val message = "검증 성공 $copied개 · 실패 ${failures.size}개\\n원본 파일과 폴더는 전혀 삭제하지 않았습니다.\\n실패 예시: ${failures.take(8).joinToString("\\n")}"
+                AlertDialog.Builder(this).setTitle("전체 프로젝트 복사 결과")
+                    .setMessage(message)
+                    .setPositiveButton("확인", null).show()
+                recordOperation("전체 프로젝트 안전 복사", projectRoot, "성공 $copied / 실패 ${failures.size}")
+            }
+        }
     }
 
     private fun exportFileList() {
@@ -1057,6 +1171,12 @@ class MainActivity : Activity() {
     }
 
     private fun copyBatchThenOfferMove(files: List<Entry>, destinationUri: Uri, groupFolderName: String? = null) {
+        if (pendingBatchMoveFolderName != null && groupFolderName == null) {
+            copyWholeProjectPreservingTree(files, destinationUri, pendingBatchMoveFolderName!!)
+            pendingBatchMoveFolderName = null
+            pendingBatchMoveEntries = emptyList()
+            return
+        }
         val selectedDestination = DocumentFile.fromTreeUri(this, destinationUri)
         if (selectedDestination == null || !selectedDestination.isDirectory || !selectedDestination.canWrite()) {
             toast("선택한 목적지에 쓸 수 없습니다."); return
