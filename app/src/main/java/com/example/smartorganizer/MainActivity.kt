@@ -60,6 +60,7 @@ class MainActivity : Activity() {
     private var pendingMoveEntry: Entry? = null
     private var pendingBatchMoveEntries: List<Entry> = emptyList()
     private var pendingBatchMoveFolderName: String? = null
+    private var pendingWholeProjectRoot: String? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -465,9 +466,12 @@ class MainActivity : Activity() {
                 val batch = pendingBatchMoveEntries
                 if (batch.isNotEmpty()) {
                     pendingBatchMoveEntries = emptyList()
+                    val wholeRoot = pendingWholeProjectRoot
+                    pendingWholeProjectRoot = null
                     val folderName = pendingBatchMoveFolderName
                     pendingBatchMoveFolderName = null
-                    copyBatchThenOfferMove(batch, destinationUri, folderName)
+                    if (wholeRoot != null) copyWholeProjectPreservingTree(batch, destinationUri, wholeRoot)
+                    else copyBatchThenOfferMove(batch, destinationUri, folderName)
                 } else if (source != null) copyThenOfferMove(source, destinationUri)
             }
             return
@@ -891,7 +895,7 @@ class MainActivity : Activity() {
 
     private fun inferProjectRoot(folderPaths: Set<String>): String? {
         val paths = folderPaths.filter { it != "(최상위 폴더)" }
-            .map { it.replace('\\\\', '/').split('/').filter { part -> part.isNotBlank() } }
+            .map { it.replace('\\', '/').split('/').filter { part -> part.isNotBlank() } }
         if (paths.isEmpty()) return null
         val extractedIndex = paths.first().indexOfFirst { it.equals("extracted", true) }
         if (extractedIndex >= 0) {
@@ -917,7 +921,8 @@ class MainActivity : Activity() {
             .setNegativeButton("취소", null)
             .setPositiveButton("복사 위치 선택") { _, _ ->
                 pendingBatchMoveEntries = safeFiles
-                pendingBatchMoveFolderName = projectRoot.substringAfterLast("/").ifBlank { "프로젝트" }
+                pendingBatchMoveFolderName = null
+                pendingWholeProjectRoot = projectRoot
                 val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
                 }
@@ -947,7 +952,7 @@ class MainActivity : Activity() {
                 try {
                     if (!entry.relativePath.startsWith(rootPrefix)) throw IllegalStateException("프로젝트 기준 경로 밖의 파일")
                     val relative = entry.relativePath.removePrefix(rootPrefix).split('/').filter { it.isNotBlank() }
-                    if (relative.isEmpty() || relative.any { it == "." || it == ".." || it.contains('\\\\') })
+                    if (relative.isEmpty() || relative.any { it == "." || it == ".." || it.contains('\\') })
                         throw IllegalStateException("안전하지 않은 상대 경로")
                     var parent = rootFolder
                     for (part in relative.dropLast(1)) {
