@@ -900,9 +900,7 @@ class MainActivity : Activity() {
         val extractedIndex = paths.first().indexOfFirst { it.equals("extracted", true) }
         if (extractedIndex >= 0) {
             val candidate = paths.first().take(extractedIndex + 2)
-            if (candidate.isNotEmpty() && paths.all { it.size >= candidate.size && it.take(candidate.size) == candidate }) {
-                return candidate.joinToString("/")
-            }
+            if (candidate.isNotEmpty()) return candidate.joinToString("/")
         }
         val common = mutableListOf<String>()
         for (index in 0 until (paths.minOfOrNull { it.size } ?: 0)) {
