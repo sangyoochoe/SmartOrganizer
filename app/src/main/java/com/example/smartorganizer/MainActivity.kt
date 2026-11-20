@@ -893,6 +893,7 @@ class MainActivity : Activity() {
         summary.text = "버전 그룹 ${versionGroups.size}개 · 프로젝트 폴더 그룹 ${projectGroups.size}개 · 선택 후 하단 ‘선택 파일 일괄 삭제’ 또는 파일 메뉴에서 이동 가능"
     }
 
+    // Whole-project copy intentionally preserves the source tree; no source deletion is performed.
     private fun inferProjectRoot(folderPaths: Set<String>): String? {
         val paths = folderPaths.filter { it != "(최상위 폴더)" }
             .map { it.replace('\\', '/').split('/').filter { part -> part.isNotBlank() } }
