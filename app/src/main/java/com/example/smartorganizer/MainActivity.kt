@@ -936,8 +936,10 @@ class MainActivity : Activity() {
             toast("선택한 목적지에 쓸 수 없습니다."); return
         }
         val rootName = projectRoot.substringAfterLast("/").ifBlank { "프로젝트" }
-        val rootFolder = selectedDestination.findFile(rootName)?.takeIf { it.isDirectory }
-            ?: selectedDestination.createDirectory(rootName)
+        if (selectedDestination.findFile(rootName) != null) {
+            toast("목적지에 같은 이름의 프로젝트가 이미 있습니다. 기존 폴더를 덮어쓰지 않도록 다른 위치를 선택하세요."); return
+        }
+        val rootFolder = selectedDestination.createDirectory(rootName)
         if (rootFolder == null || !rootFolder.isDirectory || !rootFolder.canWrite()) {
             toast("프로젝트 폴더를 만들 수 없습니다. 같은 이름의 파일이 있는지 확인하세요."); return
         }
