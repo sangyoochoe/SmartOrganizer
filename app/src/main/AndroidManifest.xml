@@ -83,9 +83,7 @@
                 <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />
                 <action android:name="android.intent.action.ACTION_POWER_DISCONNECTED" />
             </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/cyber_dashboard_widget_info" />
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/cyber_dashboard_widget_info" />
         </receiver>
         <receiver android:name=".DailyWallpaperReceiver" android:enabled="true" android:exported="false">
             <intent-filter>
@@ -100,7 +98,8 @@
         </receiver>
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:resizeableActivity="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
