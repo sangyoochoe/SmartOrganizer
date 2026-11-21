@@ -131,7 +131,8 @@ class MainActivity : Activity() {
                 setColor(0xFF132B3B.toInt())
                 cornerRadius = 14f
             }
-        }\n        summary = TextView(this).apply {
+        }
+        summary = TextView(this).apply {
             text = "검사 전 · 내부 저장공간 전체 또는 원하는 폴더를 검사하세요."
             textSize = 14f; setTextColor(0xFFEAF4FF.toInt()); setPadding(16, 15, 16, 15)
             background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 20f }
