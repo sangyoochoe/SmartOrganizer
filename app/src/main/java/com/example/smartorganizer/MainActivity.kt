@@ -1070,7 +1070,7 @@ class MainActivity : Activity() {
             }
             runOnUiThread {
                 setBusy(false)
-                val message = "검증 성공 $copied개 · 실패 ${failures.size}개\\n원본 파일과 폴더는 전혀 삭제하지 않았습니다.\\n실패 예시: ${failures.take(8).joinToString("\\n")}"
+                val message = "검증 성공 ${copied}개 · 실패 ${failures.size}개\\n원본 파일과 폴더는 전혀 삭제하지 않았습니다.\\n실패 예시: ${failures.take(8).joinToString("\\n")}"
                 AlertDialog.Builder(this).setTitle("전체 프로젝트 복사 결과")
                     .setMessage(message)
                     .setPositiveButton("확인", null).show()
