@@ -14,6 +14,11 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.*
 import androidx.documentfile.provider.DocumentFile
+import androidx.window.java.layout.WindowInfoTrackerCallbackAdapter
+import androidx.window.layout.FoldingFeature
+import androidx.window.layout.WindowInfoTracker
+import androidx.window.layout.WindowLayoutInfo
+import java.util.function.Consumer
 import java.io.File
 import java.security.MessageDigest
 import java.text.DecimalFormat
@@ -38,6 +43,9 @@ class MainActivity : Activity() {
     private lateinit var summary: TextView
     private lateinit var storageSummary: TextView
     private lateinit var results: LinearLayout
+    private lateinit var foldStatus: TextView
+    private var windowInfoAdapter: WindowInfoTrackerCallbackAdapter? = null
+    private val foldLayoutListener = Consumer<WindowLayoutInfo> { info -> updateFoldLayoutStatus(info) }
     private lateinit var scanButton: Button
     private lateinit var runScanButton: Button
     private lateinit var mediaScanButton: Button
@@ -68,6 +76,33 @@ class MainActivity : Activity() {
         restoreLooseFiles()
         buildUi()
         updateFolderSelectionUi()
+        registerFoldLayoutListener()
+    }
+
+    private fun registerFoldLayoutListener() {
+        try {
+            val adapter = WindowInfoTrackerCallbackAdapter(WindowInfoTracker.getOrCreate(this))
+            windowInfoAdapter = adapter
+            adapter.addWindowLayoutInfoListener(this, mainExecutor, foldLayoutListener)
+        } catch (_: Exception) {
+            foldStatus.text = "화면 크기에 맞춰 자동 배치 중"
+        }
+    }
+
+    private fun updateFoldLayoutStatus(info: WindowLayoutInfo) {
+        val folding = info.displayFeatures.filterIsInstance<FoldingFeature>().firstOrNull()
+        foldStatus.text = when {
+            folding == null -> "화면 모드 · 일반 화면 / 커버 화면에 맞춰 자동 배치"
+            folding.state == FoldingFeature.STATE_HALF_OPENED -> "화면 모드 · 플렉스 모드 감지 · 원본 파일 보호 유지"
+            folding.isSeparating -> "화면 모드 · 접힘 경계 감지 · 좌우 영역을 구분해 표시"
+            else -> "화면 모드 · 펼친 화면 감지 · 넓은 화면 배치"
+        }
+    }
+
+    override fun onDestroy() {
+        windowInfoAdapter?.removeWindowLayoutInfoListener(foldLayoutListener)
+        worker.shutdown()
+        super.onDestroy()
     }
 
     private fun buildUi() {
@@ -93,7 +128,7 @@ class MainActivity : Activity() {
             text = "파일 · 미디어 · 기기 꾸미기를 한곳에서"; textSize = 13f
             setTextColor(0xFF9FB2C9.toInt())
         }
-        summary = TextView(this).apply {
+        foldStatus = TextView(this).apply {\n            text = if (widthDp >= 600) "화면 모드 · 넓은 화면 배치" else "화면 모드 · 커버 화면 배치"\n            textSize = 12f; setTextColor(0xFF70D6E5.toInt()); setPadding(12, 9, 12, 9)\n            background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF132B3B.toInt()); cornerRadius = 14f }\n        }\n        summary = TextView(this).apply {
             text = "검사 전 · 내부 저장공간 전체 또는 원하는 폴더를 검사하세요."
             textSize = 14f; setTextColor(0xFFEAF4FF.toInt()); setPadding(16, 15, 16, 15)
             background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 20f }
@@ -156,7 +191,7 @@ class MainActivity : Activity() {
             }
             outer.addView(grid)
         }
-        outer.addView(title); outer.addView(subtitle); outer.addView(summary); outer.addView(storageSummary)
+        outer.addView(title); outer.addView(subtitle); outer.addView(foldStatus); outer.addView(summary); outer.addView(storageSummary)
         addSection("파일 정리", listOf(fullStorageScanButton, mediaScanButton, scanButton, downloadFolderButton, runScanButton, addFilesButton, bulkDeleteButton, manageFoldersButton))
         val quickReviewButton = Button(this).apply { text = "한눈에 점검"; isEnabled = true; setOnClickListener { showOrganizationInsights() } }
         exportListButton = Button(this).apply { text = "파일 목록 내보내기"; isEnabled = false; setOnClickListener { exportFileList() } }
