@@ -160,7 +160,7 @@ class MainActivity : Activity() {
         addSection("파일 정리", listOf(fullStorageScanButton, mediaScanButton, scanButton, downloadFolderButton, runScanButton, addFilesButton, bulkDeleteButton, manageFoldersButton))
         val quickReviewButton = Button(this).apply { text = "한눈에 점검"; isEnabled = true; setOnClickListener { showOrganizationInsights() } }
         exportListButton = Button(this).apply { text = "파일 목록 내보내기"; isEnabled = false; setOnClickListener { exportFileList() } }
-        addSection("간단 점검", listOf(quickReviewButton, exportListButton, versionManagerButton, historyButton, helpButton))
+        addSection("간단 점검", listOf(quickReviewButton, classifyButton, insightButton, duplicateButton, exportListButton, versionManagerButton, historyButton, helpButton))
         addSection("앱 관리", listOf(appsButton))
         addSection("꾸미기", listOf(wallpaperButton, launcherButton, sailorMoonButton, cyberDashboardButton, desktopStudioButton, widgetStudioButton))
         outer.addView(TextView(this).apply {
@@ -632,11 +632,16 @@ class MainActivity : Activity() {
 
     private fun classifyFile(entry: Entry): String {
         val n = entry.name.lowercase(java.util.Locale.ROOT)
+        val path = entry.relativePath.replace('\\', '/').lowercase(java.util.Locale.ROOT)
         val ext = n.substringAfterLast('.', "")
         return when {
+            path.startsWith("recordings/call/") -> "통화 녹음 (보관 권장)"
+            path.startsWith("recordings/voice recorder/") -> "음성 녹음 (보관 권장)"
+            path.startsWith("hazel zip extractor/") || path.contains("/extracted/") ||
+                path.startsWith("download/hipdogsound/") -> "개발·프로젝트 (폴더째 복사 권장 · 개별 이동 제외)"
             ext in setOf("jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "dng", "raw") -> "사진"
-            ext in setOf("mp4", "m4v", "mov", "mkv", "avi", "webm", "3gp") -> "동영상"
-            ext in setOf("mp3", "m4a", "aac", "wav", "flac", "ogg", "opus") -> "음악"
+            ext in setOf("mp4", "m4v", "mov", "mkv", "avi", "webm", "3gp", "ts") -> "동영상"
+            ext in setOf("mp3", "m4a", "aac", "wav", "flac", "ogg", "opus") -> "음악·오디오"
             ext in setOf("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "rtf", "odt", "ods", "odp", "hwp", "hwpx", "md", "csv") -> "문서"
             ext in setOf("zip", "7z", "rar", "tar", "gz", "bz2") -> "압축 파일"
             ext in setOf("apk", "apks", "aab", "dex", "so", "jar", "exe", "dll") -> "설치·실행 파일 (이동 제한)"
@@ -727,45 +732,120 @@ class MainActivity : Activity() {
         if (files.isEmpty()) { toast("먼저 폴더를 스캔하세요."); return }
         val groups = files.groupBy { classifyFile(it) }.toSortedMap()
         results.removeAllViews()
-        addLine("파일 유형 자동 분류 추천", true)
-        addLine("확장자와 파일명 기반 추천입니다. 파일 내용 검증이나 악성코드 판정은 아닙니다.")
-        addLine("보호 경로·설정 데이터·설치 파일은 이동 대상에서 제외하거나 별도 주의가 필요합니다.")
+        addLine("파일 유형별 정리", true)
+        addLine("분류별로 펼쳐 확인하고 체크한 파일만 한 번에 이동할 수 있습니다.")
+        addLine("통화·음성 녹음은 별도 보관 분류, 개발 프로젝트·설정·실행 파일은 개별 이동을 차단합니다.")
+        addLine("이동은 목적지에 복사한 뒤 크기와 SHA-256을 확인합니다. 원본은 별도 확인 전까지 유지합니다.")
+
         groups.forEach { (category, group) ->
-            addLine("$category · ${group.size}개", true)
+            val isProject = category.contains("프로젝트")
+            val isRestricted = isProject || category.contains("이동 제한") || category.contains("이동 제외")
             val movable = group.filter { entry ->
                 !isProtectedPath(entry) && !category.contains("이동 제한") &&
-                    !category.contains("이동 제외") &&
+                    !category.contains("이동 제외") && !isProject &&
                     !listOf(".apk", ".apks", ".aab", ".dex", ".so", ".jar", ".exe", ".dll").any { entry.name.endsWith(it, true) }
             }
-            if (movable.size > 1) {
-                val batchButton = Button(this).apply {
-                    text = "이 분류 ${movable.size}개 안전 이동"
-                    setOnClickListener { chooseBatchMoveDestination(movable) }
+            val card = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(8, 6, 8, 8)
+                background = android.graphics.drawable.GradientDrawable().apply {
+                    setColor(0xFF152238.toInt())
+                    cornerRadius = 14f * resources.displayMetrics.density
                 }
-                results.addView(batchButton)
             }
-            group.take(200).forEach { entry ->
-                val blocked = isProtectedPath(entry) ||
-                    category.contains("이동 제한") || category.contains("이동 제외")
-                val row = TextView(this).apply {
-                    text = (if (blocked) "🔒 " else "📄 ") + entry.relativePath + " · " + humanSize(entry.size)
-                    textSize = 13f
-                    setTextColor(0xFFE3ECF7.toInt())
-                    setPadding(8, 7, 4, 7)
-                    if (!blocked) setOnClickListener {
-                        AlertDialog.Builder(this@MainActivity)
-                            .setTitle("분류 이동")
-                            .setMessage("추천 분류: $category\n원본: ${entry.relativePath}\n\n목적지 폴더를 선택하면 먼저 복사·크기를 검증합니다. 원본 삭제는 별도 승인 전까지 하지 않습니다.")
-                            .setNegativeButton("취소", null)
-                            .setPositiveButton("목적지 선택") { _, _ -> chooseMoveDestination(entry) }
-                            .show()
+            val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = android.view.View.GONE }
+            val header = Button(this).apply {
+                text = "▶ $category · ${group.size}개"
+                isAllCaps = false
+                setOnClickListener {
+                    val open = body.visibility != android.view.View.VISIBLE
+                    body.visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE
+                    text = (if (open) "▼ " else "▶ ") + "$category · ${group.size}개"
+                }
+            }
+            val selected = linkedMapOf<String, Entry>()
+            val count = TextView(this).apply {
+                text = "선택 0개 / 이동 가능 ${movable.size}개"
+                textSize = 13f; setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 8, 8, 8)
+            }
+            body.addView(count)
+            if (isRestricted) body.addView(TextView(this).apply {
+                text = if (isProject) "⚠ 프로젝트 파일은 앱 실행·빌드에 필요할 수 있어 개별 이동을 막았습니다. 기존 폴더 구조를 유지한 전체 프로젝트 복사만 사용하세요."
+                    else "🔒 시스템·설정·실행 관련 파일은 일괄 이동 대상에서 제외했습니다."
+                textSize = 12f; setTextColor(0xFFFFD28A.toInt()); setPadding(8, 4, 8, 8)
+            })
+            val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            val checks = mutableListOf<CheckBox>()
+            val selectedRows = mutableListOf<Entry>()
+            fun refreshChecks() {
+                checks.forEach { box ->
+                    val key = box.tag as? String ?: return@forEach
+                    box.setOnCheckedChangeListener(null)
+                    box.isChecked = selected.containsKey(key)
+                    box.setOnCheckedChangeListener { _, checked ->
+                        val entry = selectedRows.firstOrNull { it.uri.toString() == key }
+                        if (entry != null) {
+                            if (checked) selected[key] = entry else selected.remove(key)
+                            count.text = "선택 ${selected.size}개 / 이동 가능 ${movable.size}개"
+                        }
                     }
                 }
-                results.addView(row)
             }
-            if (group.size > 200) addLine("화면 표시 제한: 나머지 ${group.size - 200}개 생략")
+            val selectAll = Button(this).apply {
+                text = "이 분류 선택"; isAllCaps = false; isEnabled = movable.isNotEmpty()
+                setOnClickListener {
+                    movable.forEach { selected[it.uri.toString()] = it }
+                    count.text = "선택 ${selected.size}개 / 이동 가능 ${movable.size}개"
+                    refreshChecks()
+                }
+            }
+            val clear = Button(this).apply {
+                text = "선택 해제"; isAllCaps = false
+                setOnClickListener {
+                    selected.clear(); count.text = "선택 0개 / 이동 가능 ${movable.size}개"; refreshChecks()
+                }
+            }
+            val move = Button(this).apply {
+                text = "선택 일괄 이동"; isAllCaps = false; isEnabled = movable.isNotEmpty()
+                setOnClickListener {
+                    val chosen = selected.values.toList()
+                    if (chosen.isEmpty()) toast("먼저 이동할 파일을 체크하세요.")
+                    else chooseBatchMoveDestination(chosen, category.replace(Regex("[^가-힣A-Za-z0-9 _-]"), "").take(30))
+                }
+            }
+            actions.addView(selectAll, LinearLayout.LayoutParams(0, -2, 1f))
+            actions.addView(clear, LinearLayout.LayoutParams(0, -2, 1f))
+            actions.addView(move, LinearLayout.LayoutParams(0, -2, 1f))
+            body.addView(actions)
+
+            group.take(1000).forEach { entry ->
+                val blocked = isProtectedPath(entry) || isRestricted ||
+                    listOf(".apk", ".apks", ".aab", ".dex", ".so", ".jar", ".exe", ".dll").any { entry.name.endsWith(it, true) }
+                val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(4, 2, 4, 2) }
+                val check = CheckBox(this).apply {
+                    tag = entry.uri.toString(); isEnabled = !blocked
+                    buttonTintList = android.content.res.ColorStateList.valueOf(if (blocked) 0xFF78889A.toInt() else 0xFF70D6E5.toInt())
+                    setOnCheckedChangeListener { _, checked ->
+                        val key = entry.uri.toString()
+                        if (checked) selected[key] = entry else selected.remove(key)
+                        count.text = "선택 ${selected.size}개 / 이동 가능 ${movable.size}개"
+                    }
+                }
+                checks.add(check); selectedRows.add(entry); row.addView(check)
+                row.addView(TextView(this).apply {
+                    text = (if (blocked) "🔒 " else "📄 ") + entry.relativePath + " · " + humanSize(entry.size)
+                    textSize = 12f; setTextColor(0xFFE3ECF7.toInt()); setPadding(6, 7, 4, 7)
+                    setOnClickListener { showFileActions(entry) }
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                body.addView(row)
+            }
+            if (group.size > 1000) body.addView(TextView(this).apply {
+                text = "표시 제한: ${group.size - 1000}개 파일은 목록에서 생략했습니다."
+                setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 8, 8, 8)
+            })
+            card.addView(header); card.addView(body); results.addView(card)
         }
-        summary.text = "파일 분류 추천 완료 · ${files.size}개 · 자동 이동/삭제 없음"
+        summary.text = "분류 ${groups.size}개 · 파일 ${files.size}개 · 체크한 파일만 일괄 이동 · 원본 자동 삭제 없음"
     }
 
     private fun showVersionManager() {
