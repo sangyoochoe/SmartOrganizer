@@ -926,10 +926,10 @@ class MainActivity : Activity() {
             .toSortedMap()
         addLine("프로젝트·폴더 단위 파일 그룹 · ${projectGroups.size}개", true)
         val projectRoot = inferProjectRoot(projectGroups.keys)
-        val wholeProjectFiles = if (projectRoot == null) emptyList() else files.filter {
-            it.relativePath.replace('\\\\', '/').startsWith("$projectRoot/")
-        }
-        if (wholeProjectFiles.isNotEmpty()) {
+        val wholeProjectFiles = projectRoot?.let { root ->
+            files.filter { it.relativePath.replace('\\', '/').startsWith("$root/") }
+        } ?: emptyList()
+        if (wholeProjectFiles.isNotEmpty() && projectRoot != null) {
             addLine("전체 프로젝트 복사 기준 경로: $projectRoot")
             results.addView(Button(this).apply {
                 text = "🛡 전체 프로젝트 안전 복사 · ${wholeProjectFiles.size}개 파일"
@@ -1035,18 +1035,21 @@ class MainActivity : Activity() {
                     val relative = entry.relativePath.removePrefix(rootPrefix).split('/').filter { it.isNotBlank() }
                     if (relative.isEmpty() || relative.any { it == "." || it == ".." || it.contains('\\') })
                         throw IllegalStateException("안전하지 않은 상대 경로")
-                    var parent = rootFolder
+                    var parent: DocumentFile = rootFolder
                     for (part in relative.dropLast(1)) {
-                        parent = parent.findFile(part)?.takeIf { it.isDirectory } ?: parent.createDirectory(part)
+                        val nextFolder = parent.findFile(part)?.takeIf { it.isDirectory }
+                            ?: parent.createDirectory(part)
                             ?: throw IllegalStateException("하위 폴더 생성 실패: $part")
+                        parent = nextFolder
                     }
                     val fileName = relative.last()
                     if (parent.findFile(fileName) != null) throw IllegalStateException("목적지에 같은 이름이 이미 존재")
-                    output = parent.createFile(contentResolver.getType(entry.uri) ?: "application/octet-stream", fileName)
+                    val createdOutput = parent.createFile(contentResolver.getType(entry.uri) ?: "application/octet-stream", fileName)
                         ?: throw IllegalStateException("파일 생성 실패")
+                    output = createdOutput
                     openEntryInputStream(entry.uri).use { input ->
                         if (input == null) throw IllegalStateException("원본 읽기 실패")
-                        contentResolver.openOutputStream(output.uri, "w").use { out ->
+                        contentResolver.openOutputStream(createdOutput.uri, "w").use { out ->
                             if (out == null) throw IllegalStateException("목적지 쓰기 실패")
                             val buffer = ByteArray(64 * 1024)
                             while (true) {
@@ -1057,9 +1060,8 @@ class MainActivity : Activity() {
                             out.flush()
                         }
                     }
-                    if (output.length() != entry.size) throw IllegalStateException("파일 크기 검증 실패")
-                    if (sha256Uri(entry.uri) != sha256Uri(output.uri)) throw IllegalStateException("SHA-256 검증 실패")
-                    createdFiles.add(output)
+                    if (createdOutput.length() != entry.size) throw IllegalStateException("파일 크기 검증 실패")
+                    if (sha256Uri(entry.uri) != sha256Uri(createdOutput.uri)) throw IllegalStateException("SHA-256 검증 실패")
                     copied++
                 } catch (e: Exception) {
                     try { output?.delete() } catch (_: Exception) {}
