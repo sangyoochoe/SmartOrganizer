@@ -18,7 +18,7 @@ import androidx.window.java.layout.WindowInfoTrackerCallbackAdapter
 import androidx.window.layout.FoldingFeature
 import androidx.window.layout.WindowInfoTracker
 import androidx.window.layout.WindowLayoutInfo
-import java.util.function.Consumer
+import androidx.core.util.Consumer
 import java.io.File
 import java.security.MessageDigest
 import java.text.DecimalFormat
@@ -93,16 +93,10 @@ class MainActivity : Activity() {
         val folding = info.displayFeatures.filterIsInstance<FoldingFeature>().firstOrNull()
         foldStatus.text = when {
             folding == null -> "화면 모드 · 일반 화면 / 커버 화면에 맞춰 자동 배치"
-            folding.state == FoldingFeature.STATE_HALF_OPENED -> "화면 모드 · 플렉스 모드 감지 · 원본 파일 보호 유지"
+            folding.state == FoldingFeature.State.HALF_OPENED -> "화면 모드 · 플렉스 모드 감지 · 원본 파일 보호 유지"
             folding.isSeparating -> "화면 모드 · 접힘 경계 감지 · 좌우 영역을 구분해 표시"
             else -> "화면 모드 · 펼친 화면 감지 · 넓은 화면 배치"
         }
-    }
-
-    override fun onDestroy() {
-        windowInfoAdapter?.removeWindowLayoutInfoListener(foldLayoutListener)
-        worker.shutdown()
-        super.onDestroy()
     }
 
     private fun buildUi() {
@@ -128,7 +122,16 @@ class MainActivity : Activity() {
             text = "파일 · 미디어 · 기기 꾸미기를 한곳에서"; textSize = 13f
             setTextColor(0xFF9FB2C9.toInt())
         }
-        foldStatus = TextView(this).apply {\n            text = if (widthDp >= 600) "화면 모드 · 넓은 화면 배치" else "화면 모드 · 커버 화면 배치"\n            textSize = 12f; setTextColor(0xFF70D6E5.toInt()); setPadding(12, 9, 12, 9)\n            background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF132B3B.toInt()); cornerRadius = 14f }\n        }\n        summary = TextView(this).apply {
+        foldStatus = TextView(this).apply {
+            text = if (widthDp >= 600) "화면 모드 · 넓은 화면 배치" else "화면 모드 · 커버 화면 배치"
+            textSize = 12f
+            setTextColor(0xFF70D6E5.toInt())
+            setPadding(12, 9, 12, 9)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                setColor(0xFF132B3B.toInt())
+                cornerRadius = 14f
+            }
+        }\n        summary = TextView(this).apply {
             text = "검사 전 · 내부 저장공간 전체 또는 원하는 폴더를 검사하세요."
             textSize = 14f; setTextColor(0xFFEAF4FF.toInt()); setPadding(16, 15, 16, 15)
             background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 20f }
@@ -1931,6 +1934,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        windowInfoAdapter?.removeWindowLayoutInfoListener(foldLayoutListener)
         worker.shutdown()
         super.onDestroy()
     }
