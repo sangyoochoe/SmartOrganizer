@@ -1871,7 +1871,6 @@ class MainActivity : Activity() {
                                 box.setOnCheckedChangeListener { _, isChecked ->
                                     if (isChecked) selected.add(pkg) else selected.remove(pkg)
                                     selectedCount.text = "선택한 앱: ${selected.size}개"
-                                    folderCheck.isChecked = list.all { selected.contains(it.second) }
                                 }
                             }
                             selectedCount.text = "선택한 앱: ${selected.size}개"
