@@ -815,17 +815,32 @@ class MainActivity : Activity() {
         val groups = files.groupBy { classifyFile(it) }.toSortedMap()
         results.removeAllViews()
         addLine("파일 유형별 정리", true)
-        addLine("분류별로 펼쳐 확인하고 체크한 파일만 한 번에 이동할 수 있습니다.")
-        addLine("통화·음성 녹음은 별도 보관 분류, 개발 프로젝트·설정·실행 파일은 개별 이동을 차단합니다.")
-        addLine("이동은 목적지에 복사한 뒤 크기와 SHA-256을 확인합니다. 원본은 별도 확인 전까지 유지합니다.")
+        addLine("분류별 전체 선택 후 선택 파일 삭제 또는 일괄 이동을 할 수 있습니다.")
+        addLine("APK 설치 파일은 설치된 앱과 별개인 설치 패키지이므로 원하면 삭제할 수 있습니다. APK를 삭제해도 설치된 앱은 삭제되지 않습니다.")
+        addLine("Android/.Trash 안의 파일은 삼성 내 파일 휴지통 항목일 수 있어 일괄 선택·삭제에서 제외합니다.")
+        addLine("통화·음성 녹음, 개발 프로젝트, 설정·실행 파일은 안전을 위해 일괄 삭제·이동에서 보호합니다.")
 
         groups.forEach { (category, group) ->
             val isProject = category.contains("프로젝트")
+            val isRecording = category.contains("녹음")
             val isRestricted = isProject || category.contains("이동 제한") || category.contains("이동 제외")
+            fun isTrash(entry: Entry): Boolean =
+                entry.relativePath.replace('\\\\', '/').split('/').any {
+                    it.equals(".Trash", true) || it.equals("Trash", true)
+                } || entry.relativePath.contains("com.sec.android.app.myfiles", true)
+            fun isInstaller(entry: Entry): Boolean =
+                listOf(".apk", ".apks", ".aab").any { entry.name.endsWith(it, true) }
+            fun isExecutableOrSystem(entry: Entry): Boolean =
+                listOf(".dex", ".so", ".jar", ".exe", ".dll").any { entry.name.endsWith(it, true) }
             val movable = group.filter { entry ->
-                !isProtectedPath(entry) && !category.contains("이동 제한") &&
-                    !category.contains("이동 제외") && !isProject &&
-                    !listOf(".apk", ".apks", ".aab", ".dex", ".so", ".jar", ".exe", ".dll").any { entry.name.endsWith(it, true) }
+                !isProtectedPath(entry) && !isTrash(entry) && !isRecording &&
+                    !category.contains("이동 제한") && !category.contains("이동 제외") && !isProject &&
+                    !isInstaller(entry) && !isExecutableOrSystem(entry)
+            }
+            val deletable = group.filter { entry ->
+                !isProtectedPath(entry) && !isTrash(entry) && !isRecording && !isProject &&
+                    !isExecutableOrSystem(entry) &&
+                    (!isRestricted || isInstaller(entry))
             }
             val card = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
@@ -835,87 +850,88 @@ class MainActivity : Activity() {
                     cornerRadius = 14f * resources.displayMetrics.density
                 }
             }
-            val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = android.view.View.GONE }
+            val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
             val header = Button(this).apply {
                 text = "▶ $category · ${group.size}개"
                 isAllCaps = false
                 setOnClickListener {
-                    val open = body.visibility != android.view.View.VISIBLE
-                    body.visibility = if (open) android.view.View.VISIBLE else android.view.View.GONE
+                    val open = body.visibility != View.VISIBLE
+                    body.visibility = if (open) View.VISIBLE else View.GONE
                     text = (if (open) "▼ " else "▶ ") + "$category · ${group.size}개"
                 }
             }
             val selected = linkedMapOf<String, Entry>()
             val count = TextView(this).apply {
-                text = "선택 0개 / 이동 가능 ${movable.size}개"
+                text = "선택 0개 / 삭제 가능 ${deletable.size}개 / 이동 가능 ${movable.size}개"
                 textSize = 13f; setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 8, 8, 8)
             }
             body.addView(count)
-            if (isRestricted) body.addView(TextView(this).apply {
-                text = if (isProject) "⚠ 프로젝트 파일은 앱 실행·빌드에 필요할 수 있어 개별 이동을 막았습니다. 기존 폴더 구조를 유지한 전체 프로젝트 복사만 사용하세요."
-                    else "🔒 시스템·설정·실행 관련 파일은 일괄 이동 대상에서 제외했습니다."
+            if (isRestricted || isRecording) body.addView(TextView(this).apply {
+                text = when {
+                    isRecording -> "🔒 통화·음성 녹음은 보관 보호 항목입니다. 일괄 삭제·이동할 수 없습니다."
+                    isProject -> "⚠ 프로젝트 파일은 앱 실행·빌드에 필요할 수 있어 개별 작업을 제한합니다. 기존 폴더 구조를 유지한 전체 프로젝트 복사만 사용하세요."
+                    else -> "🔒 시스템·설정·실행 관련 파일은 일괄 작업에서 제외합니다. APK 설치 패키지는 별도로 삭제할 수 있습니다."
+                }
                 textSize = 12f; setTextColor(0xFFFFD28A.toInt()); setPadding(8, 4, 8, 8)
             })
-            val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             val checks = mutableListOf<CheckBox>()
-            val selectedRows = mutableListOf<Entry>()
+            fun updateCount() {
+                count.text = "선택 ${selected.size}개 / 삭제 가능 ${deletable.size}개 / 이동 가능 ${movable.size}개"
+            }
             fun refreshChecks() {
                 checks.forEach { box ->
                     val key = box.tag as? String ?: return@forEach
                     box.setOnCheckedChangeListener(null)
                     box.isChecked = selected.containsKey(key)
                     box.setOnCheckedChangeListener { _, checked ->
-                        val entry = selectedRows.firstOrNull { it.uri.toString() == key }
-                        if (entry != null) {
-                            if (checked) selected[key] = entry else selected.remove(key)
-                            count.text = "선택 ${selected.size}개 / 이동 가능 ${movable.size}개"
-                        }
+                        val item = group.firstOrNull { it.uri.toString() == key }
+                        if (item != null) { if (checked) selected[key] = item else selected.remove(key); updateCount() }
                     }
                 }
             }
-            val selectAll = Button(this).apply {
-                text = "이 분류 선택"; isAllCaps = false; isEnabled = movable.isNotEmpty()
-                setOnClickListener {
-                    movable.forEach { selected[it.uri.toString()] = it }
-                    count.text = "선택 ${selected.size}개 / 이동 가능 ${movable.size}개"
-                    refreshChecks()
-                }
-            }
-            val clear = Button(this).apply {
+            val actions = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
+            actions.addView(Button(this).apply {
+                text = "전체 선택"; isAllCaps = false; isEnabled = deletable.isNotEmpty()
+                setOnClickListener { deletable.forEach { selected[it.uri.toString()] = it }; updateCount(); refreshChecks() }
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            actions.addView(Button(this).apply {
                 text = "선택 해제"; isAllCaps = false
+                setOnClickListener { selected.clear(); updateCount(); refreshChecks() }
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            actions.addView(Button(this).apply {
+                text = "일괄 이동"; isAllCaps = false; isEnabled = movable.isNotEmpty()
                 setOnClickListener {
-                    selected.clear(); count.text = "선택 0개 / 이동 가능 ${movable.size}개"; refreshChecks()
-                }
-            }
-            val move = Button(this).apply {
-                text = "선택 일괄 이동"; isAllCaps = false; isEnabled = movable.isNotEmpty()
-                setOnClickListener {
-                    val chosen = selected.values.toList()
-                    if (chosen.isEmpty()) toast("먼저 이동할 파일을 체크하세요.")
+                    val chosen = selected.values.filter { movable.any { m -> m.uri == it.uri } }
+                    if (chosen.isEmpty()) toast("이동 가능한 파일을 선택하세요.")
                     else chooseBatchMoveDestination(chosen, category.replace(Regex("[^가-힣A-Za-z0-9 _-]"), "").take(30))
                 }
-            }
-            actions.addView(selectAll, LinearLayout.LayoutParams(0, -2, 1f))
-            actions.addView(clear, LinearLayout.LayoutParams(0, -2, 1f))
-            actions.addView(move, LinearLayout.LayoutParams(0, -2, 1f))
+            }, LinearLayout.LayoutParams(0, -2, 1f))
             body.addView(actions)
-
+            body.addView(Button(this).apply {
+                text = "선택 파일 삭제"; isAllCaps = false; isEnabled = deletable.isNotEmpty()
+                setOnClickListener {
+                    val chosen = selected.values.filter { deletable.any { d -> d.uri == it.uri } }
+                    if (chosen.isEmpty()) toast("삭제할 파일을 선택하세요.")
+                    else confirmDeleteGroup(chosen)
+                }
+            })
             group.take(1000).forEach { entry ->
-                val blocked = isProtectedPath(entry) || isRestricted ||
-                    listOf(".apk", ".apks", ".aab", ".dex", ".so", ".jar", ".exe", ".dll").any { entry.name.endsWith(it, true) }
+                val blocked = !deletable.any { it.uri == entry.uri } && !movable.any { it.uri == entry.uri }
                 val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(4, 2, 4, 2) }
                 val check = CheckBox(this).apply {
-                    tag = entry.uri.toString(); isEnabled = !blocked
+                    tag = entry.uri.toString()
+                    isEnabled = !blocked
                     buttonTintList = android.content.res.ColorStateList.valueOf(if (blocked) 0xFF78889A.toInt() else 0xFF70D6E5.toInt())
                     setOnCheckedChangeListener { _, checked ->
                         val key = entry.uri.toString()
                         if (checked) selected[key] = entry else selected.remove(key)
-                        count.text = "선택 ${selected.size}개 / 이동 가능 ${movable.size}개"
+                        updateCount()
                     }
                 }
-                checks.add(check); selectedRows.add(entry); row.addView(check)
+                checks.add(check); row.addView(check)
                 row.addView(TextView(this).apply {
-                    text = (if (blocked) "🔒 " else "📄 ") + entry.relativePath + " · " + humanSize(entry.size)
+                    val badge = when { isTrash(entry) -> "🗑 "; isInstaller(entry) -> "📦 "; blocked -> "🔒 "; else -> "📄 " }
+                    text = badge + entry.relativePath + " · " + humanSize(entry.size)
                     textSize = 12f; setTextColor(0xFFE3ECF7.toInt()); setPadding(6, 7, 4, 7)
                     setOnClickListener { showFileActions(entry) }
                 }, LinearLayout.LayoutParams(0, -2, 1f))
@@ -927,7 +943,7 @@ class MainActivity : Activity() {
             })
             card.addView(header); card.addView(body); results.addView(card)
         }
-        summary.text = "분류 ${groups.size}개 · 파일 ${files.size}개 · 체크한 파일만 일괄 이동 · 원본 자동 삭제 없음"
+        summary.text = "분류 ${groups.size}개 · 파일 ${files.size}개 · 전체 선택 후 선택 삭제 가능 · 녹음/휴지통/프로젝트 보호"
     }
 
     private fun showVersionManager() {
