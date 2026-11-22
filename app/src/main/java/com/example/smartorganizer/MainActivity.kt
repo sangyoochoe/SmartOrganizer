@@ -1226,7 +1226,8 @@ class MainActivity : Activity() {
                 val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 6, 8, 8); background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 14f * resources.displayMetrics.density } }
                 val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
                 val chosen = linkedMapOf<String, Entry>()
-                val check = CheckBox(this).apply {
+                lateinit var groupCheck: CheckBox
+                groupCheck = CheckBox(this).apply {
                     text = "이름 중복 ${index + 1}: ${sameName.first().name} · ${sameName.size}개  (삭제 후보 ${candidates.size}개)"
                     textSize = 14f; setTextColor(0xFF70D6E5.toInt())
                     isEnabled = candidates.isNotEmpty()
@@ -1243,7 +1244,7 @@ class MainActivity : Activity() {
                                     val key = cb.tag as? String ?: return@setOnCheckedChangeListener
                                     val item = candidates.firstOrNull { it.uri.toString() == key } ?: return@setOnCheckedChangeListener
                                     if (value) chosen[key] = item else chosen.remove(key)
-                                    check.isChecked = chosen.size == candidates.size && candidates.isNotEmpty()
+                                    groupCheck.isChecked = chosen.size == candidates.size && candidates.isNotEmpty()
                                 }
                             }
                         }
