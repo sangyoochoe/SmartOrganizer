@@ -114,7 +114,9 @@ class MainActivity : Activity() {
             setPadding(18, 18, 18, 24)
             setBackgroundColor(0xFF0B1220.toInt())
         }
-        val twoPane = widthDp >= 840 || (landscape && widthDp >= 700)
+        // Galaxy Z Fold inner display is typically wider than 600dp; use a true
+        // side-by-side workspace there, while keeping the cover display stacked.
+        val twoPane = widthDp >= 600 || (landscape && widthDp >= 600)
         val menuColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(0, 0, 10, 12)
