@@ -1855,14 +1855,21 @@ class MainActivity : Activity() {
                         gravity = android.view.Gravity.CENTER_VERTICAL
                         setPadding(4, 4, 4, 4)
                     }
+                    val categoryChecks = mutableMapOf<String, CheckBox>()
                     val folderCheck = CheckBox(this).apply {
                         buttonTintList = android.content.res.ColorStateList.valueOf(0xFF70D6E5.toInt())
                         contentDescription = "$category 폴더 전체 선택"
                         setOnCheckedChangeListener { _, checked ->
                             list.forEach { (_, pkg) -> if (checked) selected.add(pkg) else selected.remove(pkg) }
+                            categoryChecks.forEach { (pkg, box) ->
+                                box.setOnCheckedChangeListener(null)
+                                box.isChecked = checked
+                                box.setOnCheckedChangeListener { _, isChecked ->
+                                    if (isChecked) selected.add(pkg) else selected.remove(pkg)
+                                    selectedCount.text = "선택한 앱: ${selected.size}개"
+                                }
+                            }
                             selectedCount.text = "선택한 앱: ${selected.size}개"
-                            // Keep visible row checkboxes synchronized with the folder checkbox.
-                            folderHeader.tag = checked
                         }
                     }
                     folderHeader.addView(folderCheck)
@@ -1911,6 +1918,7 @@ class MainActivity : Activity() {
                                 selectedCount.text = "선택한 앱: ${selected.size}개"
                             }
                         }
+                        categoryChecks[pkg] = appCheck
                         row.addView(appCheck)
                         val appLabel = TextView(this).apply {
                             text = "📱 $label"
