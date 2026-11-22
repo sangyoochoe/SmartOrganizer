@@ -709,16 +709,16 @@ class MainActivity : Activity() {
 
     private fun classifyFile(entry: Entry): String {
         val n = entry.name.lowercase(java.util.Locale.ROOT)
-        val path = entry.relativePath.replace('\\', '/').lowercase(java.util.Locale.ROOT)
+        val path = entry.relativePath.replace('\\\\', '/').lowercase(java.util.Locale.ROOT)
         val ext = n.substringAfterLast('.', "")
         return when {
-            path.startsWith("recordings/call/") -> "통화 녹음 (보관 권장)"
-            path.startsWith("recordings/voice recorder/") -> "음성 녹음 (보관 권장)"
+            listOf("recordings/call/", "call recording", "통화 녹음", "통화녹음").any { path.contains(it) || n.contains(it) } -> "통화 녹음 (보관 전용)"
+            listOf("recordings/voice recorder/", "voice recorder", "voice_record", "음성 녹음", "음성녹음", "녹음 파일").any { path.contains(it) || n.contains(it) } -> "음성 녹음 (보관 전용)"
             path.startsWith("hazel zip extractor/") || path.contains("/extracted/") ||
                 path.startsWith("download/hipdogsound/") -> "개발·프로젝트 (폴더째 복사 권장 · 개별 이동 제외)"
             ext in setOf("jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "dng", "raw") -> "사진"
             ext in setOf("mp4", "m4v", "mov", "mkv", "avi", "webm", "3gp", "ts") -> "동영상"
-            ext in setOf("mp3", "m4a", "aac", "wav", "flac", "ogg", "opus") -> "음악·오디오"
+            ext in setOf("mp3", "m4a", "aac", "wav", "flac", "ogg", "opus", "amr", "3ga") -> "음악·오디오"
             ext in setOf("pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "rtf", "odt", "ods", "odp", "hwp", "hwpx", "md", "csv") -> "문서"
             ext in setOf("zip", "7z", "rar", "tar", "gz", "bz2") -> "압축 파일"
             ext in setOf("apk", "apks", "aab", "dex", "so", "jar", "exe", "dll") -> "설치·실행 파일 (이동 제한)"
