@@ -1910,23 +1910,59 @@ class MainActivity : Activity() {
         val p = packageName.lowercase(java.util.Locale.ROOT)
         val key = "$l $p"
         fun has(vararg words: String) = words.any { key.contains(it) }
+        // Exact package overrides are evaluated before broad keyword rules.
         return when {
-            has("camera", "photo", "gallery", "갤러리", "사진", "카메라", "filmora", "clipdown") -> "사진·영상 편집"
-            has("bank", "pay", "finance", "증권", "은행", "카드", "뱅킹", "토스", "업비트", "pay", "kb", "shinhan", "woori", "hana", "nh농협", "카카오페이") -> "은행 및 카드"
-            has("shop", "shopping", "store", "market", "쇼핑", "쿠팡", "11번가", "지마켓", "옥션", "에이블리", "오늘의집", "컬리", "AliExpress".lowercase(), "무신사", "배달", "요기요", "배민") -> "쇼핑·생활"
-            has("game", "게임", "play", "rising fighter", "gamebox", "gamesir", "kmplayer") -> "게임·엔터테인먼트"
-            has("mail", "calendar", "office", "문서", "메일", "캘린더", "업무", "word", "excel", "powerpoint", "pdf", "한글", "스프레드시트", "회사 포털", "stud", "github", "notion") -> "문서·업무"
-            has("music", "audio", "video", "youtube", "음악", "동영상", "drama", "disney", "netflix", "wavve", "tving") -> "음악·동영상"
-            has("map", "nav", "지도", "내비", "교통", "지하철", "버스", "kakao.map", "tmap") -> "지도·교통"
+            p in setOf("com.taobao.taobao", "com.einnovation.temu", "com.uxlayer.wipoint",
+                "com.towneers.www", "kr.co.quicket", "com.coupang.mobile", "com.ssg",
+                "com.gmarket.mobile", "com.auction.android", "com.musinsa.store",
+                "com.kurly.mobile", "com.ohouse", "com.zigzag", "com.ably.ably",
+                "com.cafe24.shopping", "com.happypointcard.happyorder") -> "쇼핑·커머스"
+            p in setOf("com.sktelecom.tauth", "com.sktelecom.minit", "com.tms",
+                "com.skt.t_smart_charge", "com.skt.prod.dialer", "com.skt.skaf.a000z00040",
+                "com.skt.skaf.oa00018282", "com.skt.skaf.oa00199800", "com.skt.vcoloring") -> "통신사·멤버십"
+            p in setOf("com.lgt.tmoney", "kr.co.tmoney.tia", "com.tmoney.manager",
+                "com.kakao.taxi", "socar.socar", "kr.co.turu.parking",
+                "kr.co.azsmart.apartner") -> "교통·모빌리티·생활"
+            p in setOf("co.kr.catchtable.android.catchtable_app", "co.kr.waldlust.megacoffee",
+                "com.starbucks.co", "com.happypointcard.happyorder", "com.daiso.mall") -> "쇼핑·외식·멤버십"
+            p in setOf("com.shazam.android") -> "음악·오디오"
+            p in setOf("com.hello.german") -> "교육·학습"
+            p in setOf("com.danfoss.koolapp", "com.tuya.smart") -> "스마트홈·IoT"
+            p in setOf("com.microsoft.teams") -> "업무·협업"
+            p in setOf("com.rarlab.rar", "com.app.cq.ring", "org.rotomlauncher.mobile",
+                "app.revanced.manager.flutter", "com.rokidbrew.phone") -> "유틸리티·시스템 도구"
+            p in setOf("com.nhn.android.webtoon", "net.daum.android.webtoon") -> "웹툰·만화"
+            p in setOf("com.soomgo") -> "생활 서비스·전문가 매칭"
+            p in setOf("com.hdechome.myhills", "kr.co.azsmart.apartner") -> "주거·아파트"
+            p in setOf("cheehoon.ha.particulateforecaster") -> "날씨·환경"
+            p in setOf("com.ktcs.whowho") -> "전화·스팸 차단"
+            p in setOf("com.tf.thinkdroid.viewer") -> "문서·PDF"
+            p in setOf("org.openbor.engine", "com.risingfighter.app") -> "게임·엔터테인먼트"
+            p.startsWith("com.android.") || p.startsWith("com.sec.android.") ||
+                p.startsWith("com.samsung.android.") || p.startsWith("com.qualcomm.") ||
+                p.startsWith("com.qti.") || p.startsWith("vendor.") -> "시스템·기기 기능"
+            has("camera", "photo", "gallery", "갤러리", "사진", "카메라", "filmora", "clipdown", "studio", "vepreload") -> "사진·영상 편집"
+            has("bank", "pay", "finance", "증권", "은행", "카드", "뱅킹", "토스", "업비트", "kb", "shinhan", "woori", "hana", "nh농협", "카카오페이") -> "은행 및 카드"
+            has("shop", "shopping", "store", "market", "쇼핑", "쿠팡", "11번가", "지마켓", "옥션", "에이블리", "오늘의집", "컬리", "aliexpress", "무신사", "temu", "taobao", "淘宝", "다이소", "당근", "번개장터") -> "쇼핑·커머스"
+            has("game", "게임", "play", "rising fighter", "gamebox", "gamesir", "kmplayer", "openbor") -> "게임·엔터테인먼트"
+            has("mail", "calendar", "office", "문서", "메일", "캘린더", "업무", "word", "excel", "powerpoint", "pdf", "한글", "스프레드시트", "회사 포털", "stud", "github", "notion", "teams") -> "문서·업무"
+            has("music", "audio", "video", "youtube", "음악", "동영상", "drama", "disney", "netflix", "wavve", "tving", "shazam") -> "음악·동영상"
+            has("map", "nav", "지도", "내비", "교통", "지하철", "버스", "kakao.map", "tmap", "tmoney", "티머니", "쏘카", "socar", "주차", "parking") -> "지도·교통"
             has("health", "헬스", "건강", "fitness", "sleep", "수면", "의료", "병원", "med") -> "건강·의료"
-            has("weather", "날씨", "기상") -> "날씨"
+            has("weather", "날씨", "기상", "미세미세", "particulate") -> "날씨·환경"
             has("book", "reader", "ebook", "독서", "도서", "교보", "밀리", "리디") -> "독서"
+            has("webtoon", "웹툰", "만화") -> "웹툰·만화"
             has("chat", "talk", "messenger", "메신저", "카카오톡", "텔레그램", "whatsapp", "discord", "line") -> "메신저·소통"
             has("google", "chrome", "edge", "browser", "검색", "인터넷", "gemini", "chatgpt", "ai", "copilot") -> "인터넷·AI"
             has("government", "gov", "정부", "민원", "홈택스", "손택스", "위택스", "인증", "공동인증", "공공", "국세청") -> "공공·인증"
             has("samsung", "삼성", "smartthings", "galaxy", "oneui") -> "삼성 기본 앱"
-            has("file", "explorer", "파일", "압축", "zip", "extractor", "4shared", "apk") -> "파일·도구"
-            has("travel", "hotel", "airline", "여행", "항공", "숙박", "지도") -> "여행·이동"
+            has("file", "explorer", "파일", "압축", "zip", "extractor", "4shared", "apk", "rar") -> "파일·도구"
+            has("travel", "hotel", "airline", "여행", "항공", "숙박") -> "여행·이동"
+            has("telecom", "membership", "t world", "t월드", "멤버십", "v컬러링", "pass", "통신사") -> "통신사·멤버십"
+            has("restaurant", "cafe", "coffee", "카페", "맛집", "예약", "catchtable", "메가mgc", "스타벅스") -> "외식·예약·멤버십"
+            has("soomgo", "숨고", "service", "전문가") -> "생활 서비스"
+            has("smart home", "iot", "tuya", "rokid", "relay") -> "스마트홈·IoT"
+            has("education", "learn", "study", "학습", "교육", "language", "독일어") -> "교육·학습"
             else -> "기타 (직접 확인)"
         }
     }
