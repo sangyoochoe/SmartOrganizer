@@ -526,6 +526,11 @@ class MainActivity : Activity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         if (resultCode != RESULT_OK) return
+        if (requestCode == REQUEST_EXPORT_APPS) {
+            val uri = data?.data ?: return
+            exportInstalledAppsCsvTo(uri)
+            return
+        }
         if (requestCode == REQUEST_EXPORT_LIST) {
             val uri = data?.data ?: return
             exportFileListTo(uri)
@@ -1194,6 +1199,19 @@ class MainActivity : Activity() {
         val duplicateGroups = files.groupBy { it.name.lowercase(java.util.Locale.ROOT) }.values.filter { it.size > 1 }
         val groups = linkedMapOf<String, List<Entry>>()
         groups["중복 이름 파일"] = duplicateGroups.flatten().distinctBy { it.uri.toString() }
+        if (duplicateGroups.isNotEmpty()) {
+            addLine("중복 이름 검토 제안", true)
+            addLine("같은 이름만으로 내용까지 같다고 판단하지 않습니다. 각 그룹에서 수정일이 가장 오래된 파일은 삭제 후보로 제안하고, 최신 파일은 보존 후보로 표시합니다. 실제 삭제는 파일별 확인 후에만 가능합니다.")
+            duplicateGroups.forEachIndexed { index, sameName ->
+                val newest = sameName.maxOfOrNull { it.modified } ?: 0L
+                val keep = sameName.filter { it.modified == newest || it.modified <= 0L }
+                val candidates = sameName.filter { it.modified > 0L && it.modified < newest }
+                addLine("이름 중복 ${index + 1}: ${sameName.first().name} · ${sameName.size}개", true)
+                keep.forEach { addLine("✓ 최신/날짜 미상 보존 후보 · ${it.relativePath} · ${formatDate(it.modified)}") }
+                candidates.forEach { addLine("⚠ 삭제 검토 후보(자동 삭제 안 함) · ${it.relativePath} · ${formatDate(it.modified)}") }
+                if (newest <= 0L || candidates.isEmpty()) addLine("수정일만으로 삭제 후보를 정할 수 없어 보존합니다.")
+            }
+        }
         groups["대용량 파일"] = files.filter { it.size >= LARGE_FILE_BYTES }.sortedByDescending { it.size }
         val oldFiles = files.filter { it.modified > 0L && now - it.modified >= OLD_FILE_AGE }
         oldFiles.groupBy { classifyFile(it) }.toSortedMap().forEach { (type, list) -> groups["오래된 파일 · $type"] = list.sortedBy { it.modified } }
@@ -1792,6 +1810,11 @@ class MainActivity : Activity() {
                 addLine("앱 폴더 구성", true)
                 addLine("앱을 체크하고 폴더 이름을 입력하면 이 앱 안에서 폴더별로 묶어 관리합니다.")
                 addLine("삼성 One UI 홈 화면의 실제 폴더는 일반 앱이 직접 수정할 수 없어 자동 이동하지 않습니다.")
+                results.addView(Button(this).apply {
+                    text = "설치 앱 전체 목록 CSV 내보내기"
+                    isAllCaps = false
+                    setOnClickListener { exportInstalledAppsCsv() }
+                })
                 val selected = mutableSetOf<String>()
                 val selectedCount = TextView(this).apply { text = "선택한 앱: 0개"; textSize = 14f; setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 8, 8, 8) }
                 val folderName = EditText(this).apply { hint = "폴더 이름 (예: 쇼핑, 은행 및 카드)"; setSingleLine(true); setTextColor(0xFF172033.toInt()); setHintTextColor(0xFF68778C.toInt()) }
@@ -1820,6 +1843,48 @@ class MainActivity : Activity() {
                     }
                 }
                 setBusy(false)
+            }
+        }
+    }
+
+    private fun exportInstalledAppsCsv() {
+        val intent = Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "text/csv"
+            putExtra(Intent.EXTRA_TITLE, "SmartOrganizer_설치앱목록.csv")
+        }
+        startActivityForResult(intent, REQUEST_EXPORT_APPS)
+    }
+
+    private fun exportInstalledAppsCsvTo(uri: Uri) {
+        setBusy(true, "설치된 앱 목록을 CSV로 만드는 중…")
+        worker.execute {
+            try {
+                val launchIntent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+                val launchable = packageManager.queryIntentActivities(launchIntent, 0)
+                    .map { it.activityInfo.packageName }.toSet()
+                val installed = packageManager.getInstalledApplications(PackageManager.GET_META_DATA)
+                    .sortedBy { runCatching { it.loadLabel(packageManager).toString().lowercase(java.util.Locale.ROOT) }.getOrDefault(it.packageName) }
+                contentResolver.openOutputStream(uri, "wt")?.bufferedWriter(Charsets.UTF_8)?.use { out ->
+                    out.write("앱 이름,패키지명,버전,자동 분류,시스템 앱,활성화,실행 아이콘\n")
+                    fun csv(value: String) = "\"" + value.replace("\"", "\"\"").replace("\r", " ").replace("\n", " ") + "\""
+                    installed.forEach { app ->
+                        val label = runCatching { app.loadLabel(packageManager).toString() }.getOrDefault(app.packageName)
+                        val pkg = app.packageName
+                        val version = runCatching {
+                            @Suppress("DEPRECATION")
+                            packageManager.getPackageInfo(pkg, 0).versionName ?: ""
+                        }.getOrDefault("")
+                        val isSystem = app.flags and (android.content.pm.ApplicationInfo.FLAG_SYSTEM or android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+                        val enabled = app.enabled
+                        val category = automaticAppCategory(label, pkg)
+                        out.write(listOf(label, pkg, version, category, if (isSystem) "예" else "아니오", if (enabled) "예" else "아니오", if (launchable.contains(pkg)) "예" else "아니오").joinToString(",") { csv(it) })
+                        out.write("\n")
+                    }
+                } ?: throw IllegalStateException("파일을 저장할 수 없습니다.")
+                runOnUiThread { setBusy(false); toast("설치 앱 ${installed.size}개의 목록을 CSV로 저장했습니다.") }
+            } catch (e: Exception) {
+                runOnUiThread { setBusy(false); toast("앱 목록 저장 실패: ${e.message ?: "오류"}") }
             }
         }
     }
@@ -2011,6 +2076,7 @@ class MainActivity : Activity() {
         private const val REQUEST_FULL_TREE = 7103
         private const val REQUEST_MOVE_DESTINATION = 7104
         private const val REQUEST_EXPORT_LIST = 7106
+        private const val REQUEST_EXPORT_APPS = 7107
         private const val MAX_SCAN_ENTRIES = 100000
         private const val LARGE_FILE_BYTES = 100L * 1024L * 1024L
         private const val OLD_FILE_AGE = 180L * 24L * 60L * 60L * 1000L
