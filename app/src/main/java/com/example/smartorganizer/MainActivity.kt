@@ -13,6 +13,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import android.widget.*
+import android.view.View
 import androidx.documentfile.provider.DocumentFile
 import androidx.window.java.layout.WindowInfoTrackerCallbackAdapter
 import androidx.window.layout.FoldingFeature
