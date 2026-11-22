@@ -1857,8 +1857,12 @@ class MainActivity : Activity() {
                     }
                     val categoryChecks = mutableMapOf<String, CheckBox>()
                     val folderCheck = CheckBox(this).apply {
+                        text = "전체"
+                        textSize = 12f
+                        setTextColor(0xFFEAF4FF.toInt())
+                        minWidth = (64 * resources.displayMetrics.density).toInt()
                         buttonTintList = android.content.res.ColorStateList.valueOf(0xFF70D6E5.toInt())
-                        contentDescription = "$category 폴더 전체 선택"
+                        contentDescription = "$category 폴더 하위 앱 전체 선택"
                         setOnCheckedChangeListener { _, checked ->
                             list.forEach { (_, pkg) -> if (checked) selected.add(pkg) else selected.remove(pkg) }
                             categoryChecks.forEach { (pkg, box) ->
@@ -1867,6 +1871,7 @@ class MainActivity : Activity() {
                                 box.setOnCheckedChangeListener { _, isChecked ->
                                     if (isChecked) selected.add(pkg) else selected.remove(pkg)
                                     selectedCount.text = "선택한 앱: ${selected.size}개"
+                                    folderCheck.isChecked = list.all { selected.contains(it.second) }
                                 }
                             }
                             selectedCount.text = "선택한 앱: ${selected.size}개"
@@ -1874,7 +1879,7 @@ class MainActivity : Activity() {
                     }
                     folderHeader.addView(folderCheck)
                     val folderTitle = TextView(this).apply {
-                        text = "📁 $category · ${list.size}개   (여기로 드래그해 이동)"
+                        text = "📁 $category · ${list.size}개   ← 앱을 길게 눌러 여기로 드래그"
                         textSize = 15f; setTextColor(0xFF70D6E5.toInt())
                         typeface = android.graphics.Typeface.DEFAULT_BOLD
                         setPadding(8, 12, 8, 12)
@@ -1921,7 +1926,7 @@ class MainActivity : Activity() {
                         categoryChecks[pkg] = appCheck
                         row.addView(appCheck)
                         val appLabel = TextView(this).apply {
-                            text = "📱 $label"
+                            text = "⠿  📱 $label  (길게 눌러 이동)"
                             textSize = 14f; setTextColor(0xFFE3ECF7.toInt())
                             setPadding(8, 10, 8, 10)
                             setOnClickListener { showAppDetails(label, pkg) }
