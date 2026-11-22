@@ -709,7 +709,7 @@ class MainActivity : Activity() {
 
     private fun classifyFile(entry: Entry): String {
         val n = entry.name.lowercase(java.util.Locale.ROOT)
-        val path = entry.relativePath.replace('\\\\', '/').lowercase(java.util.Locale.ROOT)
+        val path = entry.relativePath.replace('\\', '/').lowercase(java.util.Locale.ROOT)
         val ext = n.substringAfterLast('.', "")
         return when {
             listOf("recordings/call/", "call recording", "통화 녹음", "통화녹음").any { path.contains(it) || n.contains(it) } -> "통화 녹음 (보관 전용)"
