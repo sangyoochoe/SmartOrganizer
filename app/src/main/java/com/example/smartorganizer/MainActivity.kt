@@ -1214,18 +1214,62 @@ class MainActivity : Activity() {
         val now = System.currentTimeMillis()
         val duplicateGroups = files.groupBy { it.name.lowercase(java.util.Locale.ROOT) }.values.filter { it.size > 1 }
         val groups = linkedMapOf<String, List<Entry>>()
-        groups["중복 이름 파일"] = duplicateGroups.flatten().distinctBy { it.uri.toString() }
         if (duplicateGroups.isNotEmpty()) {
             addLine("중복 이름 검토 제안", true)
-            addLine("같은 이름만으로 내용까지 같다고 판단하지 않습니다. 각 그룹에서 수정일이 가장 오래된 파일은 삭제 후보로 제안하고, 최신 파일은 보존 후보로 표시합니다. 실제 삭제는 파일별 확인 후에만 가능합니다.")
+            addLine("각 중복 그룹 제목 옆 체크박스로 삭제 후보만 한 번에 선택할 수 있습니다. 최신본과 날짜 미상 파일은 선택 대상에서 제외합니다.")
             duplicateGroups.forEachIndexed { index, sameName ->
                 val newest = sameName.maxOfOrNull { it.modified } ?: 0L
                 val keep = sameName.filter { it.modified == newest || it.modified <= 0L }
-                val candidates = sameName.filter { it.modified > 0L && it.modified < newest }
-                addLine("이름 중복 ${index + 1}: ${sameName.first().name} · ${sameName.size}개", true)
-                keep.forEach { addLine("✓ 최신/날짜 미상 보존 후보 · ${it.relativePath} · ${formatDate(it.modified)}") }
-                candidates.forEach { addLine("⚠ 삭제 검토 후보(자동 삭제 안 함) · ${it.relativePath} · ${formatDate(it.modified)}") }
-                if (newest <= 0L || candidates.isEmpty()) addLine("수정일만으로 삭제 후보를 정할 수 없어 보존합니다.")
+                val candidates = sameName.filter { it.modified > 0L && it.modified < newest && !isProtectedPath(it) &&
+                    !it.relativePath.contains("/.Trash/", true) && !it.relativePath.contains("com.sec.android.app.myfiles", true) &&
+                    !it.relativePath.contains("record", true) && !it.relativePath.contains("녹음", true) }
+                val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 6, 8, 8); background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 14f * resources.displayMetrics.density } }
+                val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
+                val chosen = linkedMapOf<String, Entry>()
+                val check = CheckBox(this).apply {
+                    text = "이름 중복 ${index + 1}: ${sameName.first().name} · ${sameName.size}개  (삭제 후보 ${candidates.size}개)"
+                    textSize = 14f; setTextColor(0xFF70D6E5.toInt())
+                    isEnabled = candidates.isNotEmpty()
+                    setOnCheckedChangeListener { _, checked ->
+                        chosen.clear()
+                        if (checked) candidates.forEach { chosen[it.uri.toString()] = it }
+                        body.findViewWithTag<CheckBox>("candidate_checks_${index}")?.let { }
+                        for (i in 0 until body.childCount) {
+                            val row = body.getChildAt(i) as? LinearLayout ?: continue
+                            for (j in 0 until row.childCount) {
+                                val cb = row.getChildAt(j) as? CheckBox ?: continue
+                                cb.setOnCheckedChangeListener(null); cb.isChecked = checked
+                                cb.setOnCheckedChangeListener { _, value ->
+                                    val key = cb.tag as? String ?: return@setOnCheckedChangeListener
+                                    val item = candidates.firstOrNull { it.uri.toString() == key } ?: return@setOnCheckedChangeListener
+                                    if (value) chosen[key] = item else chosen.remove(key)
+                                    check.isChecked = chosen.size == candidates.size && candidates.isNotEmpty()
+                                }
+                            }
+                        }
+                    }
+                }
+                val heading = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+                heading.addView(check, LinearLayout.LayoutParams(0, -2, 1f))
+                heading.addView(Button(this).apply { text = "펼치기"; isAllCaps = false; setOnClickListener { body.visibility = if (body.visibility == View.VISIBLE) View.GONE else View.VISIBLE } })
+                body.addView(TextView(this).apply { text = "보존 후보: ${keep.size}개 · 삭제 검토 후보: ${candidates.size}개"; setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 6, 8, 6) })
+                keep.forEach { entry -> body.addView(TextView(this).apply { text = "✓ 보존 · ${entry.relativePath} · ${formatDate(entry.modified)}"; setTextColor(0xFFB9D7C7.toInt()); setPadding(8, 5, 8, 5) }) }
+                candidates.forEach { entry ->
+                    val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+                    row.addView(CheckBox(this).apply {
+                        tag = entry.uri.toString()
+                        setOnCheckedChangeListener { _, checked -> if (checked) chosen[tag as String] = entry else chosen.remove(tag as String); check.setOnCheckedChangeListener(null); check.isChecked = chosen.size == candidates.size && candidates.isNotEmpty(); check.setOnCheckedChangeListener { _, all -> if (all) candidates.forEach { chosen[it.uri.toString()] = it } else chosen.clear() } }
+                    })
+                    row.addView(TextView(this).apply { text = "⚠ 삭제 검토 · ${entry.relativePath} · ${formatDate(entry.modified)}"; setTextColor(0xFFFFD28A.toInt()); textSize = 12f; setPadding(6, 7, 4, 7) }, LinearLayout.LayoutParams(0, -2, 1f))
+                    body.addView(row)
+                }
+                body.addView(Button(this).apply {
+                    text = "선택한 삭제 후보 ${candidates.size}개 삭제"
+                    isAllCaps = false
+                    isEnabled = candidates.isNotEmpty()
+                    setOnClickListener { if (chosen.isEmpty()) toast("먼저 이 중복 그룹의 삭제 후보를 체크하세요.") else confirmDeleteGroup(chosen.values.toList()) }
+                })
+                card.addView(heading); card.addView(body); results.addView(card)
             }
         }
         groups["대용량 파일"] = files.filter { it.size >= LARGE_FILE_BYTES }.sortedByDescending { it.size }
