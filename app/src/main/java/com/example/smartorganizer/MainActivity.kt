@@ -1226,41 +1226,35 @@ class MainActivity : Activity() {
                 val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 6, 8, 8); background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 14f * resources.displayMetrics.density } }
                 val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
                 val chosen = linkedMapOf<String, Entry>()
-                lateinit var groupCheck: CheckBox
-                groupCheck = CheckBox(this).apply {
-                    text = "이름 중복 ${index + 1}: ${sameName.first().name} · ${sameName.size}개  (삭제 후보 ${candidates.size}개)"
-                    textSize = 14f; setTextColor(0xFF70D6E5.toInt())
-                    isEnabled = candidates.isNotEmpty()
+                val candidateBoxes = mutableListOf<Pair<CheckBox, Entry>>()
+                val groupCheck = CheckBox(this).apply {
+                    text = "이름 중복 ${index + 1}: ${sameName.first().name} · ${sameName.size}개  | 삭제 후보 전체 선택 (${candidates.size})"
+                    textSize = 14f; setTextColor(0xFF70D6E5.toInt()); isEnabled = candidates.isNotEmpty()
                     setOnCheckedChangeListener { _, checked ->
                         chosen.clear()
                         if (checked) candidates.forEach { chosen[it.uri.toString()] = it }
-                        body.findViewWithTag<CheckBox>("candidate_checks_${index}")?.let { }
-                        for (i in 0 until body.childCount) {
-                            val row = body.getChildAt(i) as? LinearLayout ?: continue
-                            for (j in 0 until row.childCount) {
-                                val cb = row.getChildAt(j) as? CheckBox ?: continue
-                                cb.setOnCheckedChangeListener(null); cb.isChecked = checked
-                                cb.setOnCheckedChangeListener { _, value ->
-                                    val key = cb.tag as? String ?: return@setOnCheckedChangeListener
-                                    val item = candidates.firstOrNull { it.uri.toString() == key } ?: return@setOnCheckedChangeListener
-                                    if (value) chosen[key] = item else chosen.remove(key)
-                                    groupCheck.isChecked = chosen.size == candidates.size && candidates.isNotEmpty()
-                                }
+                        candidateBoxes.forEach { (box, _) ->
+                            box.setOnCheckedChangeListener(null); box.isChecked = checked
+                            box.setOnCheckedChangeListener { _, value ->
+                                val entry = candidateBoxes.firstOrNull { it.first === box }?.second
+                                if (entry != null) { if (value) chosen[entry.uri.toString()] = entry else chosen.remove(entry.uri.toString()) }
                             }
                         }
                     }
                 }
                 val heading = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
-                heading.addView(check, LinearLayout.LayoutParams(0, -2, 1f))
+                heading.addView(groupCheck, LinearLayout.LayoutParams(0, -2, 1f))
                 heading.addView(Button(this).apply { text = "펼치기"; isAllCaps = false; setOnClickListener { body.visibility = if (body.visibility == View.VISIBLE) View.GONE else View.VISIBLE } })
                 body.addView(TextView(this).apply { text = "보존 후보: ${keep.size}개 · 삭제 검토 후보: ${candidates.size}개"; setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 6, 8, 6) })
                 keep.forEach { entry -> body.addView(TextView(this).apply { text = "✓ 보존 · ${entry.relativePath} · ${formatDate(entry.modified)}"; setTextColor(0xFFB9D7C7.toInt()); setPadding(8, 5, 8, 5) }) }
                 candidates.forEach { entry ->
                     val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
-                    row.addView(CheckBox(this).apply {
+                    val candidateBox = CheckBox(this).apply {
                         tag = entry.uri.toString()
-                        setOnCheckedChangeListener { _, checked -> if (checked) chosen[tag as String] = entry else chosen.remove(tag as String); check.setOnCheckedChangeListener(null); check.isChecked = chosen.size == candidates.size && candidates.isNotEmpty(); check.setOnCheckedChangeListener { _, all -> if (all) candidates.forEach { chosen[it.uri.toString()] = it } else chosen.clear() } }
-                    })
+                        setOnCheckedChangeListener { _, checked -> if (checked) chosen[entry.uri.toString()] = entry else chosen.remove(entry.uri.toString()) }
+                    }
+                    candidateBoxes.add(candidateBox to entry)
+                    row.addView(candidateBox)
                     row.addView(TextView(this).apply { text = "⚠ 삭제 검토 · ${entry.relativePath} · ${formatDate(entry.modified)}"; setTextColor(0xFFFFD28A.toInt()); textSize = 12f; setPadding(6, 7, 4, 7) }, LinearLayout.LayoutParams(0, -2, 1f))
                     body.addView(row)
                 }
