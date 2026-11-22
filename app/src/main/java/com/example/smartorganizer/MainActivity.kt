@@ -825,7 +825,7 @@ class MainActivity : Activity() {
             val isRecording = category.contains("녹음")
             val isRestricted = isProject || category.contains("이동 제한") || category.contains("이동 제외")
             fun isTrash(entry: Entry): Boolean =
-                entry.relativePath.replace('\\\\', '/').split('/').any {
+                entry.relativePath.replace('/', '/').split('/').any {
                     it.equals(".Trash", true) || it.equals("Trash", true)
                 } || entry.relativePath.contains("com.sec.android.app.myfiles", true)
             fun isInstaller(entry: Entry): Boolean =
