@@ -1850,11 +1850,85 @@ class MainActivity : Activity() {
                     val edit = prefs.edit(); selected.forEach { edit.remove(it) }; edit.apply(); showLaunchableApps()
                 } })
                 groups.forEach { (category, list) ->
-                    addLine("📁 $category · ${list.size}개", true)
+                    val folderHeader = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = android.view.Gravity.CENTER_VERTICAL
+                        setPadding(4, 4, 4, 4)
+                    }
+                    val folderCheck = CheckBox(this).apply {
+                        buttonTintList = android.content.res.ColorStateList.valueOf(0xFF70D6E5.toInt())
+                        contentDescription = "$category 폴더 전체 선택"
+                        setOnCheckedChangeListener { _, checked ->
+                            list.forEach { (_, pkg) -> if (checked) selected.add(pkg) else selected.remove(pkg) }
+                            selectedCount.text = "선택한 앱: ${selected.size}개"
+                            // Keep visible row checkboxes synchronized with the folder checkbox.
+                            folderHeader.tag = checked
+                        }
+                    }
+                    folderHeader.addView(folderCheck)
+                    val folderTitle = TextView(this).apply {
+                        text = "📁 $category · ${list.size}개   (여기로 드래그해 이동)"
+                        textSize = 15f; setTextColor(0xFF70D6E5.toInt())
+                        typeface = android.graphics.Typeface.DEFAULT_BOLD
+                        setPadding(8, 12, 8, 12)
+                    }
+                    folderHeader.addView(folderTitle, LinearLayout.LayoutParams(0, -2, 1f))
+                    val acceptDrop = android.view.View.OnDragListener { _, event ->
+                        when (event.action) {
+                            android.view.DragEvent.ACTION_DRAG_STARTED -> event.clipDescription?.hasMimeType("text/plain") == true
+                            android.view.DragEvent.ACTION_DRAG_ENTERED -> { folderTitle.alpha = 0.55f; true }
+                            android.view.DragEvent.ACTION_DRAG_EXITED -> { folderTitle.alpha = 1f; true }
+                            android.view.DragEvent.ACTION_DROP -> {
+                                folderTitle.alpha = 1f
+                                val pkg = event.clipData?.getItemAt(0)?.text?.toString()
+                                if (!pkg.isNullOrBlank() && apps.any { it.second == pkg }) {
+                                    prefs.edit().putString(pkg, category).apply()
+                                    recordOperation("앱 수동 폴더 이동", pkg, category)
+                                    toast("앱을 ‘$category’ 폴더로 이동했습니다.")
+                                    showLaunchableApps()
+                                }
+                                true
+                            }
+                            android.view.DragEvent.ACTION_DRAG_ENDED -> { folderTitle.alpha = 1f; true }
+                            else -> true
+                        }
+                    }
+                    folderHeader.setOnDragListener(acceptDrop)
+                    folderTitle.setOnDragListener(acceptDrop)
+                    results.addView(folderHeader)
                     list.forEach { (label, pkg) ->
-                        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(4, 3, 4, 3); setBackgroundColor(0xFF111D2E.toInt()) }
-                        row.addView(CheckBox(this).apply { buttonTintList = android.content.res.ColorStateList.valueOf(0xFF70D6E5.toInt()); setOnCheckedChangeListener { _, checked -> if (checked) selected.add(pkg) else selected.remove(pkg); selectedCount.text = "선택한 앱: ${selected.size}개" } })
-                        row.addView(TextView(this).apply { text = "📱 $label"; textSize = 14f; setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 10, 8, 10); setOnClickListener { showAppDetails(label, pkg) }; setOnLongClickListener { editAppCategory(label, pkg); true } }, LinearLayout.LayoutParams(0, -2, 1f))
+                        val row = LinearLayout(this).apply {
+                            orientation = LinearLayout.HORIZONTAL
+                            gravity = android.view.Gravity.CENTER_VERTICAL
+                            setPadding(4, 3, 4, 3)
+                            setBackgroundColor(0xFF111D2E.toInt())
+                        }
+                        val appCheck = CheckBox(this).apply {
+                            buttonTintList = android.content.res.ColorStateList.valueOf(0xFF70D6E5.toInt())
+                            isChecked = selected.contains(pkg)
+                            setOnCheckedChangeListener { _, checked ->
+                                if (checked) selected.add(pkg) else selected.remove(pkg)
+                                selectedCount.text = "선택한 앱: ${selected.size}개"
+                            }
+                        }
+                        row.addView(appCheck)
+                        val appLabel = TextView(this).apply {
+                            text = "📱 $label"
+                            textSize = 14f; setTextColor(0xFFE3ECF7.toInt())
+                            setPadding(8, 10, 8, 10)
+                            setOnClickListener { showAppDetails(label, pkg) }
+                            setOnLongClickListener { view ->
+                                val clip = android.content.ClipData.newPlainText("installed-app-package", pkg)
+                                if (android.os.Build.VERSION.SDK_INT >= 24) {
+                                    view.startDragAndDrop(clip, android.view.View.DragShadowBuilder(view), pkg, 0)
+                                } else {
+                                    @Suppress("DEPRECATION")
+                                    view.startDrag(clip, android.view.View.DragShadowBuilder(view), pkg, 0)
+                                }
+                                true
+                            }
+                        }
+                        row.addView(appLabel, LinearLayout.LayoutParams(0, -2, 1f))
                         results.addView(row)
                     }
                 }
