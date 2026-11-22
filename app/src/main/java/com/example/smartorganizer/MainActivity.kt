@@ -1812,18 +1812,31 @@ class MainActivity : Activity() {
     }
 
     private fun automaticAppCategory(label: String, packageName: String): String {
-        val key = (label + " " + packageName).lowercase()
+        val l = label.lowercase(java.util.Locale.ROOT)
+        val p = packageName.lowercase(java.util.Locale.ROOT)
+        val key = "$l $p"
+        fun has(vararg words: String) = words.any { key.contains(it) }
         return when {
-            listOf("camera", "photo", "gallery", "카메라", "갤러리", "사진").any { key.contains(it) } -> "사진·카메라"
-            listOf("bank", "pay", "finance", "은행", "카드", "금융", "증권").any { key.contains(it) } -> "은행 및 카드"
-            listOf("shop", "store", "market", "쇼핑", "쿠팡", "배달").any { key.contains(it) } -> "쇼핑"
-            listOf("game", "play", "게임").any { key.contains(it) } -> "게임·엔터테인먼트"
-            listOf("mail", "calendar", "office", "문서", "메일", "캘린더", "업무").any { key.contains(it) } -> "업무·생산성"
-            listOf("music", "audio", "video", "youtube", "음악", "동영상").any { key.contains(it) } -> "음악·동영상"
-            listOf("map", "nav", "지도", "내비").any { key.contains(it) } -> "지도·이동"
-            else -> "기타"
+            has("camera", "photo", "gallery", "갤러리", "사진", "카메라", "filmora", "clipdown") -> "사진·영상 편집"
+            has("bank", "pay", "finance", "증권", "은행", "카드", "뱅킹", "토스", "업비트", "pay", "kb", "shinhan", "woori", "hana", "nh농협", "카카오페이") -> "은행 및 카드"
+            has("shop", "shopping", "store", "market", "쇼핑", "쿠팡", "11번가", "지마켓", "옥션", "에이블리", "오늘의집", "컬리", "AliExpress".lowercase(), "무신사", "배달", "요기요", "배민") -> "쇼핑·생활"
+            has("game", "게임", "play", "rising fighter", "gamebox", "gamesir", "kmplayer") -> "게임·엔터테인먼트"
+            has("mail", "calendar", "office", "문서", "메일", "캘린더", "업무", "word", "excel", "powerpoint", "pdf", "한글", "스프레드시트", "회사 포털", "stud", "github", "notion") -> "문서·업무"
+            has("music", "audio", "video", "youtube", "음악", "동영상", "drama", "disney", "netflix", "wavve", "tving") -> "음악·동영상"
+            has("map", "nav", "지도", "내비", "교통", "지하철", "버스", "kakao.map", "tmap") -> "지도·교통"
+            has("health", "헬스", "건강", "fitness", "sleep", "수면", "의료", "병원", "med") -> "건강·의료"
+            has("weather", "날씨", "기상") -> "날씨"
+            has("book", "reader", "ebook", "독서", "도서", "교보", "밀리", "리디") -> "독서"
+            has("chat", "talk", "messenger", "메신저", "카카오톡", "텔레그램", "whatsapp", "discord", "line") -> "메신저·소통"
+            has("google", "chrome", "edge", "browser", "검색", "인터넷", "gemini", "chatgpt", "ai", "copilot") -> "인터넷·AI"
+            has("government", "gov", "정부", "민원", "홈택스", "손택스", "위택스", "인증", "공동인증", "공공", "국세청") -> "공공·인증"
+            has("samsung", "삼성", "smartthings", "galaxy", "oneui") -> "삼성 기본 앱"
+            has("file", "explorer", "파일", "압축", "zip", "extractor", "4shared", "apk") -> "파일·도구"
+            has("travel", "hotel", "airline", "여행", "항공", "숙박", "지도") -> "여행·이동"
+            else -> "기타 (직접 확인)"
         }
     }
+
     private fun showAppDetails(label: String, packageName: String) {
         try {
             val info = packageManager.getApplicationInfo(packageName, PackageManager.GET_META_DATA)
