@@ -113,6 +113,11 @@ class MainActivity : Activity() {
             setPadding(18, 18, 18, 24)
             setBackgroundColor(0xFF0B1220.toInt())
         }
+        val twoPane = widthDp >= 840 || (landscape && widthDp >= 700)
+        val menuColumn = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, 0, 10, 12)
+        }
         val title = TextView(this).apply {
             text = "✦  스마트 정리함"; textSize = 27f
             setTextColor(0xFFF2F7FF.toInt()); typeface = android.graphics.Typeface.DEFAULT_BOLD
@@ -173,7 +178,7 @@ class MainActivity : Activity() {
             setOnClickListener { showUserGuide() }
         }
         fun addSection(label: String, buttons: List<Button>) {
-            outer.addView(TextView(this).apply {
+            menuColumn.addView(TextView(this).apply {
                 text = label; textSize = 16f; setTextColor(0xFF70D6E5.toInt())
                 typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(3, 18, 3, 7)
             })
@@ -193,22 +198,52 @@ class MainActivity : Activity() {
                 ).apply { width = 0; height = (82*density).toInt(); setMargins((4*density).toInt(), (4*density).toInt(), (4*density).toInt(), (4*density).toInt()) }
                 grid.addView(button, lp)
             }
-            outer.addView(grid)
+            menuColumn.addView(grid)
         }
-        outer.addView(title); outer.addView(subtitle); outer.addView(foldStatus); outer.addView(summary); outer.addView(storageSummary)
+        menuColumn.addView(title); menuColumn.addView(subtitle); menuColumn.addView(foldStatus); menuColumn.addView(summary); menuColumn.addView(storageSummary)
         addSection("파일 정리", listOf(fullStorageScanButton, mediaScanButton, scanButton, downloadFolderButton, runScanButton, addFilesButton, bulkDeleteButton, manageFoldersButton))
         val quickReviewButton = Button(this).apply { text = "한눈에 점검"; isEnabled = true; setOnClickListener { showOrganizationInsights() } }
         exportListButton = Button(this).apply { text = "파일 목록 내보내기"; isEnabled = false; setOnClickListener { exportFileList() } }
         addSection("간단 점검", listOf(quickReviewButton, classifyButton, insightButton, duplicateButton, exportListButton, versionManagerButton, historyButton, helpButton))
         addSection("앱 관리", listOf(appsButton))
         addSection("꾸미기", listOf(wallpaperButton, launcherButton, sailorMoonButton, cyberDashboardButton, desktopStudioButton, widgetStudioButton))
-        outer.addView(TextView(this).apply {
-            text = "검사 결과 전체 목록"; textSize = 18f; setTextColor(0xFFF2F7FF.toInt())
+        val resultPanel = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(if (twoPane) 14 else 0, 0, 0, 8)
+        }
+        resultPanel.addView(TextView(this).apply {
+            text = if (twoPane) "검사 결과 · 상세 작업" else "검사 결과 전체 목록"
+            textSize = 18f; setTextColor(0xFFF2F7FF.toInt())
             typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(2, 22, 2, 8)
         })
         results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 6, 0, 8) }
-        outer.addView(results)
-        setContentView(ScrollView(this).apply { isFillViewport = true; clipToPadding = false; addView(outer) })
+        resultPanel.addView(results)
+
+        if (twoPane) {
+            val splitRoot = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setPadding(18, 14, 18, 18)
+                setBackgroundColor(0xFF0B1220.toInt())
+            }
+            splitRoot.addView(ScrollView(this).apply {
+                isFillViewport = true
+                clipToPadding = false
+                addView(menuColumn)
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 0.42f))
+            splitRoot.addView(View(this).apply {
+                setBackgroundColor(0xFF263B52.toInt())
+            }, LinearLayout.LayoutParams((1 * density).toInt(), LinearLayout.LayoutParams.MATCH_PARENT))
+            splitRoot.addView(ScrollView(this).apply {
+                isFillViewport = true
+                clipToPadding = false
+                addView(resultPanel)
+            }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 0.58f))
+            setContentView(splitRoot)
+        } else {
+            outer.addView(menuColumn)
+            outer.addView(resultPanel)
+            setContentView(ScrollView(this).apply { isFillViewport = true; clipToPadding = false; addView(outer) })
+        }
         updateStorageSummary()
     }
 
