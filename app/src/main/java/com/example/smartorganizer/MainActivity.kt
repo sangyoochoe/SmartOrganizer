@@ -1216,54 +1216,131 @@ class MainActivity : Activity() {
         val groups = linkedMapOf<String, List<Entry>>()
         if (duplicateGroups.isNotEmpty()) {
             addLine("중복 이름 검토 제안", true)
-            addLine("각 중복 그룹 제목 옆 체크박스로 삭제 후보만 한 번에 선택할 수 있습니다. 최신본과 날짜 미상 파일은 선택 대상에서 제외합니다.")
-            duplicateGroups.forEachIndexed { index, sameName ->
+            addLine("파일명이 같다는 이유만으로 삭제하지 않습니다. 프로젝트·소스·휴지통·녹음 파일, 최신본, 크기가 다른 파일은 일괄 삭제 후보에서 제외합니다. 내용까지 같은지 확인하려면 SHA-256 검사를 사용하세요.")
+            val selectedDuplicateCandidates = linkedMapOf<String, Entry>()
+            val candidateCheckboxes = mutableListOf<Pair<CheckBox, Entry>>()
+            val duplicateGroupsWithCandidates = duplicateGroups.map { sameName ->
                 val newest = sameName.maxOfOrNull { it.modified } ?: 0L
                 val keep = sameName.filter { it.modified == newest || it.modified <= 0L }
-                val candidates = sameName.filter { it.modified > 0L && it.modified < newest && !isProtectedPath(it) &&
-                    !it.relativePath.contains("/.Trash/", true) && !it.relativePath.contains("com.sec.android.app.myfiles", true) &&
-                    !it.relativePath.contains("record", true) && !it.relativePath.contains("녹음", true) }
+                val newestSize = sameName.filter { it.modified == newest && newest > 0L }.map { it.size }.distinct()
+                val protectedByPath = sameName.filter { entry ->
+                    val path = entry.relativePath.replace('\\\\', '/').lowercase(java.util.Locale.ROOT)
+                    val name = entry.name.lowercase(java.util.Locale.ROOT)
+                    isProtectedPath(entry) ||
+                        path.contains("/.trash/") || path.contains("com.sec.android.app.myfiles") ||
+                        path.contains("record") || path.contains("녹음") ||
+                        path.contains("/src/") || path.contains("/assets/") || path.contains("/vendor/") ||
+                        path.contains("/.git/") || path.contains("hazel zip extractor") ||
+                        path.contains("hipdogsound") ||
+                        name in setOf("readme.md", "cmakelists.txt", "build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts", ".gitignore") ||
+                        name.endsWith(".kt") || name.endsWith(".java") || name.endsWith(".cpp") || name.endsWith(".h") ||
+                        name.endsWith(".ts") || name.endsWith(".js") || name.endsWith(".py") || name.endsWith(".task")
+                }.map { it.uri.toString() }.toSet()
+                val candidates = sameName.filter { entry ->
+                    entry.modified > 0L && entry.modified < newest &&
+                        newestSize.size == 1 && entry.size == newestSize.first() &&
+                        entry.uri.toString() !in protectedByPath
+                }
+                Triple(sameName, keep, candidates)
+            }
+            val allSafeCandidates = duplicateGroupsWithCandidates.flatMap { it.third }.distinctBy { it.uri.toString() }
+            val toolbar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+            val globalSelect = CheckBox(this).apply {
+                text = "삭제 검토 가능한 항목 전체 선택 (${allSafeCandidates.size})"
+                textSize = 14f; setTextColor(0xFF70D6E5.toInt()); isEnabled = allSafeCandidates.isNotEmpty()
+                setOnCheckedChangeListener { _, checked ->
+                    selectedDuplicateCandidates.clear()
+                    if (checked) allSafeCandidates.forEach { selectedDuplicateCandidates[it.uri.toString()] = it }
+                    candidateCheckboxes.forEach { (box, entry) ->
+                        box.setOnCheckedChangeListener(null)
+                        box.isChecked = checked
+                        box.setOnCheckedChangeListener { _, value ->
+                            if (value) selectedDuplicateCandidates[entry.uri.toString()] = entry
+                            else selectedDuplicateCandidates.remove(entry.uri.toString())
+                            globalSelect.isChecked = selectedDuplicateCandidates.size == allSafeCandidates.size && allSafeCandidates.isNotEmpty()
+                        }
+                    }
+                }
+            }
+            val globalDelete = Button(this).apply {
+                text = "선택 삭제"; isAllCaps = false; isEnabled = allSafeCandidates.isNotEmpty()
+                setOnClickListener {
+                    val chosen = selectedDuplicateCandidates.values.toList()
+                    if (chosen.isEmpty()) toast("먼저 전체 선택 또는 개별 선택을 해주세요.")
+                    else confirmDeleteGroup(chosen)
+                }
+            }
+            toolbar.addView(globalSelect, LinearLayout.LayoutParams(0, -2, 1f))
+            toolbar.addView(globalDelete)
+            results.addView(toolbar)
+            addLine("한 번의 삭제 확인으로 선택한 후보를 처리합니다. 선택 전에 그룹별 경로와 파일 크기를 확인하세요.")
+            duplicateGroupsWithCandidates.forEachIndexed { index, triple ->
+                val sameName = triple.first
+                val keep = triple.second
+                val candidates = triple.third
                 val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 6, 8, 8); background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 14f * resources.displayMetrics.density } }
                 val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
-                val chosen = linkedMapOf<String, Entry>()
-                val candidateBoxes = mutableListOf<Pair<CheckBox, Entry>>()
                 val groupCheck = CheckBox(this).apply {
-                    text = "이름 중복 ${index + 1}: ${sameName.first().name} · ${sameName.size}개  | 삭제 후보 전체 선택 (${candidates.size})"
+                    text = "이름 중복 ${index + 1}: ${sameName.first().name} · ${sameName.size}개 | 안전 후보 ${candidates.size}개"
                     textSize = 14f; setTextColor(0xFF70D6E5.toInt()); isEnabled = candidates.isNotEmpty()
                     setOnCheckedChangeListener { _, checked ->
-                        chosen.clear()
-                        if (checked) candidates.forEach { chosen[it.uri.toString()] = it }
-                        candidateBoxes.forEach { (box, _) ->
+                        candidates.forEach { entry ->
+                            if (checked) selectedDuplicateCandidates[entry.uri.toString()] = entry
+                            else selectedDuplicateCandidates.remove(entry.uri.toString())
+                        }
+                        candidateCheckboxes.filter { pair -> candidates.any { it.uri == pair.second.uri } }.forEach { (box, _) ->
                             box.setOnCheckedChangeListener(null); box.isChecked = checked
+                            val entry = candidates.first { it.uri == box.tag }
                             box.setOnCheckedChangeListener { _, value ->
-                                val entry = candidateBoxes.firstOrNull { it.first === box }?.second
-                                if (entry != null) { if (value) chosen[entry.uri.toString()] = entry else chosen.remove(entry.uri.toString()) }
+                                if (value) selectedDuplicateCandidates[entry.uri.toString()] = entry
+                                else selectedDuplicateCandidates.remove(entry.uri.toString())
+                                globalSelect.setOnCheckedChangeListener(null)
+                                globalSelect.isChecked = selectedDuplicateCandidates.size == allSafeCandidates.size && allSafeCandidates.isNotEmpty()
+                                globalSelect.setOnCheckedChangeListener { _, all ->
+                                    selectedDuplicateCandidates.clear()
+                                    if (all) allSafeCandidates.forEach { selectedDuplicateCandidates[it.uri.toString()] = it }
+                                    candidateCheckboxes.forEach { (cb, item) -> cb.setOnCheckedChangeListener(null); cb.isChecked = all }
+                                }
                             }
+                        }
+                        globalSelect.setOnCheckedChangeListener(null)
+                        globalSelect.isChecked = selectedDuplicateCandidates.size == allSafeCandidates.size && allSafeCandidates.isNotEmpty()
+                        globalSelect.setOnCheckedChangeListener { _, all ->
+                            selectedDuplicateCandidates.clear()
+                            if (all) allSafeCandidates.forEach { selectedDuplicateCandidates[it.uri.toString()] = it }
+                            candidateCheckboxes.forEach { (cb, item) -> cb.setOnCheckedChangeListener(null); cb.isChecked = all }
                         }
                     }
                 }
                 val heading = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
                 heading.addView(groupCheck, LinearLayout.LayoutParams(0, -2, 1f))
                 heading.addView(Button(this).apply { text = "펼치기"; isAllCaps = false; setOnClickListener { body.visibility = if (body.visibility == View.VISIBLE) View.GONE else View.VISIBLE } })
-                body.addView(TextView(this).apply { text = "보존 후보: ${keep.size}개 · 삭제 검토 후보: ${candidates.size}개"; setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 6, 8, 6) })
-                keep.forEach { entry -> body.addView(TextView(this).apply { text = "✓ 보존 · ${entry.relativePath} · ${formatDate(entry.modified)}"; setTextColor(0xFFB9D7C7.toInt()); setPadding(8, 5, 8, 5) }) }
+                body.addView(TextView(this).apply { text = "보존/날짜 미상: ${keep.size}개 · 안전 삭제 검토: ${candidates.size}개 · 전체 동일 크기 기준"; setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 6, 8, 6) })
+                keep.forEach { entry -> body.addView(TextView(this).apply { text = "✓ 보존 · ${entry.relativePath} · ${humanSize(entry.size)} · ${formatDate(entry.modified)}"; setTextColor(0xFFB9D7C7.toInt()); setPadding(8, 5, 8, 5) }) }
+                sameName.filter { entry -> entry !in keep && entry !in candidates }.forEach { entry ->
+                    body.addView(TextView(this).apply { text = "🔒 자동 선택 제외(경로/파일 크기 확인 필요) · ${entry.relativePath} · ${humanSize(entry.size)}"; setTextColor(0xFFFFD28A.toInt()); textSize = 12f; setPadding(8, 5, 8, 5) })
+                }
                 candidates.forEach { entry ->
                     val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
                     val candidateBox = CheckBox(this).apply {
                         tag = entry.uri.toString()
-                        setOnCheckedChangeListener { _, checked -> if (checked) chosen[entry.uri.toString()] = entry else chosen.remove(entry.uri.toString()) }
+                        setOnCheckedChangeListener { _, checked ->
+                            if (checked) selectedDuplicateCandidates[entry.uri.toString()] = entry
+                            else selectedDuplicateCandidates.remove(entry.uri.toString())
+                            globalSelect.setOnCheckedChangeListener(null)
+                            globalSelect.isChecked = selectedDuplicateCandidates.size == allSafeCandidates.size && allSafeCandidates.isNotEmpty()
+                            globalSelect.setOnCheckedChangeListener { _, all ->
+                                selectedDuplicateCandidates.clear()
+                                if (all) allSafeCandidates.forEach { selectedDuplicateCandidates[it.uri.toString()] = it }
+                                candidateCheckboxes.forEach { (cb, item) -> cb.setOnCheckedChangeListener(null); cb.isChecked = all }
+                            }
+                        }
                     }
-                    candidateBoxes.add(candidateBox to entry)
+                    candidateCheckboxes.add(candidateBox to entry)
                     row.addView(candidateBox)
-                    row.addView(TextView(this).apply { text = "⚠ 삭제 검토 · ${entry.relativePath} · ${formatDate(entry.modified)}"; setTextColor(0xFFFFD28A.toInt()); textSize = 12f; setPadding(6, 7, 4, 7) }, LinearLayout.LayoutParams(0, -2, 1f))
+                    row.addView(TextView(this).apply { text = "삭제 검토 · ${entry.relativePath} · ${humanSize(entry.size)} · ${formatDate(entry.modified)}"; setTextColor(0xFFFFD28A.toInt()); textSize = 12f; setPadding(6, 7, 4, 7) }, LinearLayout.LayoutParams(0, -2, 1f))
                     body.addView(row)
                 }
-                body.addView(Button(this).apply {
-                    text = "선택한 삭제 후보 ${candidates.size}개 삭제"
-                    isAllCaps = false
-                    isEnabled = candidates.isNotEmpty()
-                    setOnClickListener { if (chosen.isEmpty()) toast("먼저 이 중복 그룹의 삭제 후보를 체크하세요.") else confirmDeleteGroup(chosen.values.toList()) }
-                })
                 card.addView(heading); card.addView(body); results.addView(card)
             }
         }
