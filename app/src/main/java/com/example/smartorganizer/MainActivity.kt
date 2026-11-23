@@ -1224,7 +1224,7 @@ class MainActivity : Activity() {
                 val keep = sameName.filter { it.modified == newest || it.modified <= 0L }
                 val newestSize = sameName.filter { it.modified == newest && newest > 0L }.map { it.size }.distinct()
                 val protectedByPath = sameName.filter { entry ->
-                    val path = entry.relativePath.replace('\\\\', '/').lowercase(java.util.Locale.ROOT)
+                    val path = entry.relativePath.replace('\\', '/').lowercase(java.util.Locale.ROOT)
                     val name = entry.name.lowercase(java.util.Locale.ROOT)
                     isProtectedPath(entry) ||
                         path.contains("/.trash/") || path.contains("com.sec.android.app.myfiles") ||
