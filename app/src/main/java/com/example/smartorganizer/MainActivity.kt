@@ -1245,7 +1245,8 @@ class MainActivity : Activity() {
             }
             val allSafeCandidates = duplicateGroupsWithCandidates.flatMap { it.third }.distinctBy { it.uri.toString() }
             val toolbar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
-            val globalSelect = CheckBox(this).apply {
+            lateinit var globalSelect: CheckBox
+            globalSelect = CheckBox(this).apply {
                 text = "삭제 검토 가능한 항목 전체 선택 (${allSafeCandidates.size})"
                 textSize = 14f; setTextColor(0xFF70D6E5.toInt()); isEnabled = allSafeCandidates.isNotEmpty()
                 setOnCheckedChangeListener { _, checked ->
