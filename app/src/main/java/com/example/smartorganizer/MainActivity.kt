@@ -35,6 +35,50 @@ private data class Entry(
     val directory: Boolean
 )
 
+
+private class EbookActionIconDrawable(
+    private val kind: String,
+    private val tint: Int
+) : android.graphics.drawable.Drawable() {
+    private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = tint
+        style = android.graphics.Paint.Style.STROKE
+        strokeWidth = 1.8f
+        strokeCap = android.graphics.Paint.Cap.ROUND
+        strokeJoin = android.graphics.Paint.Join.ROUND
+    }
+    private val path = android.graphics.Path()
+    override fun draw(canvas: android.graphics.Canvas) {
+        val b = bounds
+        val save = canvas.save()
+        canvas.translate(b.left.toFloat(), b.top.toFloat())
+        canvas.scale(b.width() / 24f, b.height() / 24f)
+        val r = android.graphics.RectF(3f, 2.5f, 21f, 21.5f)
+        when (kind) {
+            "storage" -> { canvas.drawRoundRect(r, 2f, 2f, paint); canvas.drawLine(3f, 8f, 21f, 8f, paint); canvas.drawCircle(17.5f, 5.3f, .7f, paint); canvas.drawCircle(19.5f, 5.3f, .7f, paint) }
+            "media" -> { canvas.drawRoundRect(r, 3f, 3f, paint); canvas.drawCircle(12f, 12f, 4f, paint); canvas.drawPath(android.graphics.Path().apply { moveTo(10f, 9f); lineTo(16f, 12f); lineTo(10f, 15f); close() }, paint) }
+            "folder", "download", "manage" -> { canvas.drawPath(android.graphics.Path().apply { moveTo(2.5f, 7f); lineTo(9f, 7f); lineTo(11f, 9f); lineTo(21.5f, 9f); lineTo(21.5f, 19f); lineTo(2.5f, 19f); close() }, paint); if (kind == "download") { canvas.drawLine(12f, 3f, 12f, 13f, paint); canvas.drawLine(8.5f, 10f, 12f, 13.5f, paint); canvas.drawLine(15.5f, 10f, 12f, 13.5f, paint) } }
+            "scan", "review", "duplicate", "audit" -> { canvas.drawCircle(10f, 10f, 6f, paint); canvas.drawLine(14.5f, 14.5f, 21f, 21f, paint); if (kind == "duplicate") { canvas.drawCircle(10f, 10f, 2.5f, paint) } }
+            "add" -> { canvas.drawCircle(12f, 12f, 9f, paint); canvas.drawLine(12f, 7f, 12f, 17f, paint); canvas.drawLine(7f, 12f, 17f, 12f, paint) }
+            "delete" -> { canvas.drawPath(android.graphics.Path().apply { moveTo(5f, 7f); lineTo(19f, 7f); moveTo(9f, 7f); lineTo(9f, 4f); lineTo(15f, 4f); lineTo(15f, 7f); moveTo(7f, 7f); lineTo(8f, 20f); lineTo(16f, 20f); lineTo(17f, 7f); moveTo(10f, 10f); lineTo(10f, 17f); moveTo(14f, 10f); lineTo(14f, 17f) }, paint) }
+            "classify", "apps", "widgets" -> { for (x in 4..16 step 6) for (y in 4..16 step 6) canvas.drawRoundRect(x.toFloat(), y.toFloat(), x + 4f, y + 4f, 1f, 1f, paint) }
+            "apk" -> { canvas.drawPath(android.graphics.Path().apply { moveTo(12f, 2.5f); lineTo(20f, 6f); lineTo(19f, 16f); lineTo(12f, 21.5f); lineTo(5f, 16f); lineTo(4f, 6f); close() }, paint); canvas.drawLine(8f, 12f, 11f, 15f, paint); canvas.drawLine(11f, 15f, 16f, 9f, paint) }
+            "archive", "versions" -> { canvas.drawRoundRect(r, 2f, 2f, paint); canvas.drawLine(3f, 7f, 21f, 7f, paint); canvas.drawLine(9f, 11f, 15f, 11f, paint); canvas.drawLine(9f, 15f, 15f, 15f, paint) }
+            "history" -> { canvas.drawCircle(12f, 12f, 9f, paint); canvas.drawLine(12f, 6f, 12f, 12f, paint); canvas.drawLine(12f, 12f, 16f, 14f, paint) }
+            "theme" -> { canvas.drawPath(android.graphics.Path().apply { moveTo(19f, 16f); cubicTo(10f, 20f, 5f, 11f, 12f, 4f); cubicTo(12f, 13f, 16f, 16f, 19f, 16f); close() }, paint) }
+            "dashboard" -> { canvas.drawRoundRect(r, 2f, 2f, paint); canvas.drawLine(3f, 9f, 21f, 9f, paint); canvas.drawLine(9f, 9f, 9f, 21f, paint); canvas.drawLine(9f, 15f, 21f, 15f, paint) }
+            else -> { canvas.drawRoundRect(r, 3f, 3f, paint); canvas.drawLine(7f, 12f, 17f, 12f, paint); canvas.drawLine(12f, 7f, 12f, 17f, paint) }
+        }
+        canvas.restoreToCount(save)
+    }
+    override fun setAlpha(alpha: Int) { paint.alpha = alpha }
+    override fun setColorFilter(filter: android.graphics.ColorFilter?) { paint.colorFilter = filter }
+    @Deprecated("Deprecated in Java")
+    override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
+    override fun getIntrinsicWidth(): Int = 28
+    override fun getIntrinsicHeight(): Int = 28
+}
+
 class MainActivity : Activity() {
     private val worker = Executors.newSingleThreadExecutor()
     private val entries = mutableListOf<Entry>()
@@ -181,29 +225,29 @@ class MainActivity : Activity() {
             setOnClickListener { showUserGuide() }
         }
         val buttonLabels = linkedMapOf<Button, Pair<String, String>>(
-            fullStorageScanButton to ("▣" to "내부 저장공간 전체 검사"),
-            mediaScanButton to ("◉" to "사진 · 동영상 · 음악 검사"),
-            scanButton to ("▱" to "스캔할 폴더 추가"),
-            downloadFolderButton to ("⇩" to "Download 하위 폴더 선택"),
-            runScanButton to ("▶" to "선택한 폴더 모두 스캔 (0개)"),
-            addFilesButton to ("＋" to "개별 파일 여러 개 추가"),
-            bulkDeleteButton to ("⌫" to "선택 파일 일괄 삭제"),
-            manageFoldersButton to ("▤" to "선택 폴더 관리"),
-            duplicateButton to ("◎" to "완전 중복 검사 · SHA-256"),
-            insightButton to ("⌕" to "정리 후보 분석"),
-            classifyButton to ("▦" to "파일 유형 분류 · 이동 추천"),
-            contentAuditButton to ("⌁" to "파일 내용 시그니처 검사"),
-            apkButton to ("◇" to "APK 권한 · 버전 검사"),
-            archiveButton to ("▧" to "ZIP 내부 구성 검사"),
-            historyButton to ("◷" to "파일 작업 기록"),
-            versionManagerButton to ("▥" to "파일 버전 · 프로젝트 관리"),
-            appsButton to ("▦" to "앱 분류 · 그룹 관리"),
-            wallpaperButton to ("▧" to "월페이퍼 스튜디오"),
-            launcherButton to ("▣" to "사진 기반 나만의 홈 화면"),
-            sailorMoonButton to ("☾" to "세일러문 Fold 테마"),
-            cyberDashboardButton to ("ϟ" to "사이버 포뮬러 대시보드"),
-            desktopStudioButton to ("▤" to "AI 데스크톱 스튜디오"),
-            widgetStudioButton to ("⊞" to "나만의 위젯 스튜디오")
+            fullStorageScanButton to ("storage" to "내부 저장공간 전체 검사"),
+            mediaScanButton to ("media" to "사진 · 동영상 · 음악 검사"),
+            scanButton to ("folder" to "스캔할 폴더 추가"),
+            downloadFolderButton to ("download" to "Download 하위 폴더 선택"),
+            runScanButton to ("scan" to "선택한 폴더 모두 스캔 (0개)"),
+            addFilesButton to ("add" to "개별 파일 여러 개 추가"),
+            bulkDeleteButton to ("delete" to "선택 파일 일괄 삭제"),
+            manageFoldersButton to ("manage" to "선택 폴더 관리"),
+            duplicateButton to ("duplicate" to "완전 중복 검사 · SHA-256"),
+            insightButton to ("review" to "정리 후보 분석"),
+            classifyButton to ("classify" to "파일 유형 분류 · 이동 추천"),
+            contentAuditButton to ("audit" to "파일 내용 시그니처 검사"),
+            apkButton to ("apk" to "APK 권한 · 버전 검사"),
+            archiveButton to ("archive" to "ZIP 내부 구성 검사"),
+            historyButton to ("history" to "파일 작업 기록"),
+            versionManagerButton to ("versions" to "파일 버전 · 프로젝트 관리"),
+            appsButton to ("classify" to "앱 분류 · 그룹 관리"),
+            wallpaperButton to ("archive" to "월페이퍼 스튜디오"),
+            launcherButton to ("storage" to "사진 기반 나만의 홈 화면"),
+            sailorMoonButton to ("theme" to "세일러문 Fold 테마"),
+            cyberDashboardButton to ("dashboard" to "사이버 포뮬러 대시보드"),
+            desktopStudioButton to ("manage" to "AI 데스크톱 스튜디오"),
+            widgetStudioButton to ("widgets" to "나만의 위젯 스튜디오")
         )
         fun addSection(label: String, buttons: List<Button>) {
             val sectionIcon = when (label) {
@@ -221,7 +265,7 @@ class MainActivity : Activity() {
             val grid = android.widget.GridLayout(this).apply { columnCount = columns; useDefaultMargins = false; alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS }
             buttons.forEachIndexed { index, button ->
                 val item = buttonLabels[button]
-                if (item != null) button.text = "${item.first}\n${item.second}"
+                if (item != null) { button.text = item.second; button.setCompoundDrawablesWithIntrinsicBounds(null, EbookActionIconDrawable(item.first, if (button === mediaScanButton || button === runScanButton || button === fullStorageScanButton) 0xFFF4F0E6.toInt() else 0xFF65734B.toInt()), null, null); button.compoundDrawablePadding = (5 * density).toInt() }
                 button.isAllCaps = false; button.textSize = 12f; button.gravity = android.view.Gravity.CENTER
                 button.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
                 button.setTextColor(if (button === mediaScanButton || button === runScanButton || button === fullStorageScanButton) 0xFFF4F0E6.toInt() else 0xFF302F27.toInt())
