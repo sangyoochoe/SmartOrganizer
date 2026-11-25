@@ -1848,60 +1848,125 @@ class MainActivity : Activity() {
     }
 
     private fun scanExactDuplicates() {
-        if (entries.none { !it.directory }) return
-        val snapshot = entries.toList()
-        setBusy(true, "크기가 같은 파일 후보를 SHA-256으로 비교 중입니다…")
+        val snapshot = entries.filter { !it.directory && it.size > 0L }
+        if (snapshot.isEmpty()) { toast("먼저 저장공간을 검사하세요."); return }
+        setBusy(true, "동일 크기 파일의 SHA-256을 비교 중입니다…")
         worker.execute {
-            val candidates = snapshot.filter { !it.directory && it.size > 0L }
-                .groupBy { it.size }.values.filter { it.size > 1 }
-            val groups = mutableMapOf<String, MutableList<Entry>>()
-            for (bucket in candidates) for (entry in bucket) {
+            val buckets = snapshot.groupBy { it.size }.values.filter { it.size > 1 }
+            val hashGroups = mutableMapOf<String, MutableList<Entry>>()
+            var processed = 0
+            for (bucket in buckets) for (entry in bucket) {
                 try {
-                    val md = MessageDigest.getInstance("SHA-256")
+                    val digest = MessageDigest.getInstance("SHA-256")
                     openEntryInputStream(entry.uri)?.use { input ->
                         val buffer = ByteArray(64 * 1024)
                         while (true) {
                             val count = input.read(buffer)
                             if (count < 0) break
-                            md.update(buffer, 0, count)
+                            digest.update(buffer, 0, count)
                         }
                     } ?: continue
-                    val hash = md.digest().joinToString("") { "%02x".format(it) }
-                    groups.getOrPut(hash) { mutableListOf() }.add(entry)
-                } catch (_: Exception) {}
+                    val hash = digest.digest().joinToString("") { "%02x".format(it) }
+                    hashGroups.getOrPut(hash) { mutableListOf() }.add(entry)
+                } catch (_: Exception) { }
+                processed++
+                if (processed % 100 == 0) {
+                    val done = processed
+                    runOnUiThread { summary.text = "SHA-256 검사 중 · $done / ${buckets.sumOf { it.size }}개" }
+                }
             }
-            val duplicates = groups.values.filter { it.size > 1 }
+            val duplicateGroups = hashGroups.values.filter { it.size > 1 }
+            val safeGroups = duplicateGroups.mapNotNull { group ->
+                val protected = group.filter { entry ->
+                    val path = entry.relativePath.replace('\\\\', '/').lowercase(java.util.Locale.ROOT)
+                    val name = entry.name.lowercase(java.util.Locale.ROOT)
+                    isProtectedPath(entry) ||
+                        path.contains("/.trash/") || path.contains("com.sec.android.app.myfiles") ||
+                        path.contains("record") || path.contains("녹음") ||
+                        path.contains("/src/") || path.contains("/assets/") || path.contains("/vendor/") ||
+                        path.contains("/.git/") || path.contains("hipdogsound") || path.contains("hazel zip extractor") ||
+                        name.endsWith(".task") || name.endsWith(".kt") || name.endsWith(".java") ||
+                        name.endsWith(".cpp") || name.endsWith(".h") || name.endsWith(".ts") ||
+                        name.endsWith(".js") || name.endsWith(".py")
+                }.map { it.uri.toString() }.toSet()
+                val eligible = group.filter { it.uri.toString() !in protected }
+                if (eligible.size < 2) null else {
+                    val newest = eligible.maxOfOrNull { it.modified } ?: 0L
+                    val keep = eligible.filter { it.modified == newest || it.modified <= 0L }
+                    val remove = eligible.filter { it.modified > 0L && (newest <= 0L || it.modified < newest) }
+                    if (remove.isEmpty()) null else Triple(group, keep, remove)
+                }
+            }
             runOnUiThread {
                 results.removeAllViews()
-                if (duplicates.isEmpty()) {
-                    summary.text = "검사 가능한 파일에서 동일 내용의 중복 파일을 찾지 못했습니다."
-                    addLine("완전 중복 파일 없음")
+                if (safeGroups.isEmpty()) {
+                    summary.text = "SHA-256 완전 중복 검사 완료 · 안전 삭제 후보 없음"
+                    addLine("내용이 완전히 같은 파일 중 자동 선택 가능한 안전 후보가 없습니다.")
+                    addLine("보호 경로, 프로젝트 파일, 녹음 파일, 최신본, 날짜 미상 파일은 삭제 후보에서 제외했습니다.")
                 } else {
-                    summary.text = "내용이 완전히 같은 중복 파일 그룹 ${duplicates.size}개 · 최신 수정 파일을 보존 후보로 표시합니다. 자동 삭제는 하지 않습니다."
-                    duplicates.forEachIndexed { index, group ->
-                        val newestModified = group.maxOfOrNull { it.modified } ?: 0L
-                        val keepers = group.filter { it.modified == newestModified || it.modified <= 0L }
-                        val deleteCandidates = group.filter { it.modified > 0L && it.modified < newestModified }
-                        addLine("중복 그룹 ${index + 1} · ${group.size}개", true)
-                        if (newestModified > 0L) {
-                            addLine("보존 후보: 최신 수정일 ${formatDate(newestModified)}")
-                        } else {
-                            addLine("보존 후보: 수정 날짜를 알 수 없어 자동 선정하지 않았습니다.")
-                        }
-                        keepers.forEach { entry ->
-                            addLine("✓ 보존 후보 · ${entry.relativePath}")
-                            addLine("  크기 ${humanSize(entry.size)} · 수정 ${formatDate(entry.modified)}")
-                        }
-                        if (deleteCandidates.isNotEmpty()) {
-                            addLine("삭제 후보 · ${deleteCandidates.size}개 (사용자 확인 필요)")
-                            deleteCandidates.forEach { entry ->
-                                addLine("  삭제 후보 · ${entry.relativePath}")
-                                addLine("  크기 ${humanSize(entry.size)} · 수정 ${formatDate(entry.modified)}")
+                    val allCandidates = safeGroups.flatMap { it.third }.distinctBy { it.uri.toString() }
+                    val selected = linkedMapOf<String, Entry>()
+                    val rowBoxes = mutableListOf<Pair<CheckBox, Entry>>()
+                    addLine("SHA-256 완전 중복 · ${safeGroups.size}개 그룹", true)
+                    addLine("파일 내용이 완전히 같은 그룹만 표시합니다. 녹음·휴지통·프로젝트·소스 파일은 보호합니다.")
+                    val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+                    lateinit var allCheck: CheckBox
+                    allCheck = CheckBox(this).apply {
+                        text = "안전 삭제 후보 전체 선택 (${allCandidates.size})"
+                        setTextColor(0xFF70D6E5.toInt())
+                        setOnCheckedChangeListener { _, checked ->
+                            selected.clear()
+                            if (checked) allCandidates.forEach { selected[it.uri.toString()] = it }
+                            rowBoxes.forEach { (box, entry) ->
+                                box.setOnCheckedChangeListener(null); box.isChecked = checked
+                                box.setOnCheckedChangeListener { _, value ->
+                                    if (value) selected[entry.uri.toString()] = entry else selected.remove(entry.uri.toString())
+                                }
                             }
-                        } else if (keepers.size > 1) {
-                            addLine("최신 수정 날짜가 같아 여러 파일을 보존 후보로 남겼습니다.")
                         }
                     }
+                    bar.addView(allCheck, LinearLayout.LayoutParams(0, -2, 1f))
+                    bar.addView(Button(this).apply {
+                        text = "선택 삭제"; isAllCaps = false
+                        setOnClickListener {
+                            val chosen = selected.values.toList()
+                            if (chosen.isEmpty()) toast("삭제할 안전 후보를 먼저 선택하세요.")
+                            else confirmDeleteGroup(chosen)
+                        }
+                    })
+                    results.addView(bar)
+                    addLine("한 번의 확인으로 선택한 파일을 삭제합니다. 각 그룹에서 최신본은 보존 후보로 남깁니다.")
+                    safeGroups.forEachIndexed { index, triple ->
+                        val group = triple.first
+                        val keep = triple.second
+                        val remove = triple.third
+                        val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 6, 8, 8); background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 14f * resources.displayMetrics.density } }
+                        val title = TextView(this).apply {
+                            text = "중복 그룹 ${index + 1} · ${group.first().name} · ${group.size}개 · 삭제 후보 ${remove.size}개"
+                            setTextColor(0xFF70D6E5.toInt()); textSize = 14f; setPadding(8, 10, 8, 10)
+                        }
+                        card.addView(title)
+                        keep.forEach { entry -> card.addView(TextView(this).apply { text = "✓ 보존 · ${entry.relativePath} · ${humanSize(entry.size)}"; setTextColor(0xFFB9D7C7.toInt()); setPadding(8, 4, 8, 4) }) }
+                        remove.forEach { entry ->
+                            val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+                            val box = CheckBox(this)
+                            box.setOnCheckedChangeListener { _, checked ->
+                                if (checked) selected[entry.uri.toString()] = entry else selected.remove(entry.uri.toString())
+                                allCheck.setOnCheckedChangeListener(null)
+                                allCheck.isChecked = selected.size == allCandidates.size && allCandidates.isNotEmpty()
+                                allCheck.setOnCheckedChangeListener { _, all ->
+                                    selected.clear()
+                                    if (all) allCandidates.forEach { selected[it.uri.toString()] = it }
+                                    rowBoxes.forEach { (cb, item) -> cb.setOnCheckedChangeListener(null); cb.isChecked = all }
+                                }
+                            }
+                            rowBoxes.add(box to entry); row.addView(box)
+                            row.addView(TextView(this).apply { text = "삭제 검토 · ${entry.relativePath} · ${humanSize(entry.size)}"; setTextColor(0xFFFFD28A.toInt()); textSize = 12f; setPadding(5, 6, 4, 6) }, LinearLayout.LayoutParams(0, -2, 1f))
+                            card.addView(row)
+                        }
+                        results.addView(card)
+                    }
+                    summary.text = "SHA-256 완전 중복 ${safeGroups.size}개 그룹 · 안전 삭제 후보 ${allCandidates.size}개"
                 }
                 setBusy(false)
             }
