@@ -180,21 +180,57 @@ class MainActivity : Activity() {
             text = "사용 방법 · 정리 순서"
             setOnClickListener { showUserGuide() }
         }
+        val buttonLabels = linkedMapOf<Button, Pair<String, String>>(
+            fullStorageScanButton to ("▣" to "내부 저장공간 전체 검사"),
+            mediaScanButton to ("◉" to "사진 · 동영상 · 음악 검사"),
+            scanButton to ("▱" to "스캔할 폴더 추가"),
+            downloadFolderButton to ("⇩" to "Download 하위 폴더 선택"),
+            runScanButton to ("▶" to "선택한 폴더 모두 스캔 (0개)"),
+            addFilesButton to ("＋" to "개별 파일 여러 개 추가"),
+            bulkDeleteButton to ("⌫" to "선택 파일 일괄 삭제"),
+            manageFoldersButton to ("▤" to "선택 폴더 관리"),
+            duplicateButton to ("◎" to "완전 중복 검사 · SHA-256"),
+            insightButton to ("⌕" to "정리 후보 분석"),
+            classifyButton to ("▦" to "파일 유형 분류 · 이동 추천"),
+            contentAuditButton to ("⌁" to "파일 내용 시그니처 검사"),
+            apkButton to ("◇" to "APK 권한 · 버전 검사"),
+            archiveButton to ("▧" to "ZIP 내부 구성 검사"),
+            historyButton to ("◷" to "파일 작업 기록"),
+            versionManagerButton to ("▥" to "파일 버전 · 프로젝트 관리"),
+            appsButton to ("▦" to "앱 분류 · 그룹 관리"),
+            wallpaperButton to ("▧" to "월페이퍼 스튜디오"),
+            launcherButton to ("▣" to "사진 기반 나만의 홈 화면"),
+            sailorMoonButton to ("☾" to "세일러문 Fold 테마"),
+            cyberDashboardButton to ("ϟ" to "사이버 포뮬러 대시보드"),
+            desktopStudioButton to ("▤" to "AI 데스크톱 스튜디오"),
+            widgetStudioButton to ("⊞" to "나만의 위젯 스튜디오")
+        )
         fun addSection(label: String, buttons: List<Button>) {
+            val sectionIcon = when (label) {
+                "파일 정리" -> "▣"
+                "간단 점검" -> "⌕"
+                "앱 관리" -> "▦"
+                "꾸미기" -> "▧"
+                else -> "·"
+            }
             menuColumn.addView(TextView(this).apply {
-                text = label; textSize = 16f; setTextColor(0xFF65734B.toInt())
-                typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(3, 18, 3, 7)
+                text = "$sectionIcon  $label"; textSize = 15f; setTextColor(0xFF65734B.toInt())
+                typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(3, 16, 3, 7)
+                letterSpacing = 0.025f
             })
             val grid = android.widget.GridLayout(this).apply { columnCount = columns; useDefaultMargins = false; alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS }
             buttons.forEachIndexed { index, button ->
-                button.isAllCaps = false; button.textSize = 13f; button.gravity = android.view.Gravity.CENTER
+                val item = buttonLabels[button]
+                if (item != null) button.text = "${item.first}\n${item.second}"
+                button.isAllCaps = false; button.textSize = 12f; button.gravity = android.view.Gravity.CENTER
+                button.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
                 button.setTextColor(if (button === mediaScanButton || button === runScanButton || button === fullStorageScanButton) 0xFFF4F0E6.toInt() else 0xFF302F27.toInt())
                 button.background = android.graphics.drawable.GradientDrawable().apply {
                     setColor(if (button === mediaScanButton || button === runScanButton || button === fullStorageScanButton) 0xFF65734B.toInt() else 0xFFE8E1D2.toInt())
-                    cornerRadius = 8f * density; setStroke((1 * density).toInt(), 0xFFC9C0AD.toInt())
+                    cornerRadius = 5f * density; setStroke((1 * density).toInt(), 0xFFC9C0AD.toInt())
                 }
-                button.setPadding((10*density).toInt(), (12*density).toInt(), (10*density).toInt(), (12*density).toInt())
-                button.minHeight = (66*density).toInt()
+                button.setPadding((8*density).toInt(), (9*density).toInt(), (8*density).toInt(), (9*density).toInt())
+                button.minHeight = (70*density).toInt()
                 val lp = android.widget.GridLayout.LayoutParams(
                     android.widget.GridLayout.spec(index / columns, 1f),
                     android.widget.GridLayout.spec(index % columns, 1f)
