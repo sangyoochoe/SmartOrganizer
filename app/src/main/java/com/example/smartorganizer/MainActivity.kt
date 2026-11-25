@@ -1878,7 +1878,7 @@ class MainActivity : Activity() {
             val duplicateGroups = hashGroups.values.filter { it.size > 1 }
             val safeGroups = duplicateGroups.mapNotNull { group ->
                 val protected = group.filter { entry ->
-                    val path = entry.relativePath.replace('\\\\', '/').lowercase(java.util.Locale.ROOT)
+                    val path = entry.relativePath.replace('\\', '/').lowercase(java.util.Locale.ROOT)
                     val name = entry.name.lowercase(java.util.Locale.ROOT)
                     isProtectedPath(entry) ||
                         path.contains("/.trash/") || path.contains("com.sec.android.app.myfiles") ||
