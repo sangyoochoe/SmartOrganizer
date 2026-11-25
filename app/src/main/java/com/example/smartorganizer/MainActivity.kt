@@ -111,8 +111,8 @@ class MainActivity : Activity() {
         }
         val outer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(18, 18, 18, 24)
-            setBackgroundColor(0xFF0B1220.toInt())
+            setPadding(14, 14, 14, 18)
+            setBackgroundColor(0xFFF4F0E6.toInt())
         }
         // Galaxy Z Fold inner display is typically wider than 600dp; use a true
         // side-by-side workspace there, while keeping the cover display stacked.
@@ -122,32 +122,32 @@ class MainActivity : Activity() {
             setPadding(0, 0, 10, 12)
         }
         val title = TextView(this).apply {
-            text = "✦  스마트 정리함"; textSize = 27f
-            setTextColor(0xFFF2F7FF.toInt()); typeface = android.graphics.Typeface.DEFAULT_BOLD
+            text = "▤  스마트 정리함"; textSize = 27f
+            setTextColor(0xFF28271F.toInt()); typeface = android.graphics.Typeface.DEFAULT_BOLD
             setPadding(0, 0, 0, 5)
         }
         val subtitle = TextView(this).apply {
-            text = "파일 · 미디어 · 기기 꾸미기를 한곳에서"; textSize = 13f
-            setTextColor(0xFF9FB2C9.toInt())
+            text = "파일과 앱을 차분하게 정리하는 공간"; textSize = 13f
+            setTextColor(0xFF777365.toInt())
         }
         foldStatus = TextView(this).apply {
             text = if (widthDp >= 600) "화면 모드 · 넓은 화면 배치" else "화면 모드 · 커버 화면 배치"
             textSize = 12f
-            setTextColor(0xFF70D6E5.toInt())
+            setTextColor(0xFF65734B.toInt())
             setPadding(12, 9, 12, 9)
             background = android.graphics.drawable.GradientDrawable().apply {
-                setColor(0xFF132B3B.toInt())
-                cornerRadius = 14f
+                setColor(0xFFE9E3D5.toInt())
+                cornerRadius = 7f
             }
         }
         summary = TextView(this).apply {
             text = "검사 전 · 내부 저장공간 전체 또는 원하는 폴더를 검사하세요."
-            textSize = 14f; setTextColor(0xFFEAF4FF.toInt()); setPadding(16, 15, 16, 15)
-            background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 20f }
+            textSize = 14f; setTextColor(0xFF302F27.toInt()); setPadding(16, 15, 16, 15)
+            background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFFF0EBDD.toInt()); cornerRadius = 10f }
         }
         storageSummary = TextView(this).apply {
-            textSize = 13f; setTextColor(0xFFB9D0E8.toInt()); setPadding(16, 12, 16, 12)
-            background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF132B3B.toInt()); cornerRadius = 18f }
+            textSize = 13f; setTextColor(0xFF615F53.toInt()); setPadding(16, 12, 16, 12)
+            background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFFE9E3D5.toInt()); cornerRadius = 10f }
         }
         scanButton = Button(this).apply { text = "＋ 스캔할 폴더 추가"; setOnClickListener { chooseFolder() }; setOnLongClickListener { showSelectedFolders(); true } }
         val downloadFolderButton = Button(this).apply { text = "⬇ Download 하위 폴더 선택"; setOnClickListener { chooseDownloadFolder() } }
@@ -182,19 +182,19 @@ class MainActivity : Activity() {
         }
         fun addSection(label: String, buttons: List<Button>) {
             menuColumn.addView(TextView(this).apply {
-                text = label; textSize = 16f; setTextColor(0xFF70D6E5.toInt())
+                text = label; textSize = 16f; setTextColor(0xFF65734B.toInt())
                 typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(3, 18, 3, 7)
             })
             val grid = android.widget.GridLayout(this).apply { columnCount = columns; useDefaultMargins = false; alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS }
             buttons.forEachIndexed { index, button ->
                 button.isAllCaps = false; button.textSize = 13f; button.gravity = android.view.Gravity.CENTER
-                button.setTextColor(if (button === mediaScanButton || button === runScanButton || button === fullStorageScanButton) 0xFF071522.toInt() else 0xFFEAF4FF.toInt())
+                button.setTextColor(if (button === mediaScanButton || button === runScanButton || button === fullStorageScanButton) 0xFFF4F0E6.toInt() else 0xFF302F27.toInt())
                 button.background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(if (button === mediaScanButton || button === runScanButton || button === fullStorageScanButton) 0xFF70D6E5.toInt() else 0xFF243650.toInt())
-                    cornerRadius = 18f * density; setStroke((1 * density).toInt(), 0xFF36516D.toInt())
+                    setColor(if (button === mediaScanButton || button === runScanButton || button === fullStorageScanButton) 0xFF65734B.toInt() else 0xFFE8E1D2.toInt())
+                    cornerRadius = 8f * density; setStroke((1 * density).toInt(), 0xFFC9C0AD.toInt())
                 }
                 button.setPadding((10*density).toInt(), (12*density).toInt(), (10*density).toInt(), (12*density).toInt())
-                button.minHeight = (76*density).toInt()
+                button.minHeight = (66*density).toInt()
                 val lp = android.widget.GridLayout.LayoutParams(
                     android.widget.GridLayout.spec(index / columns, 1f),
                     android.widget.GridLayout.spec(index % columns, 1f)
@@ -216,7 +216,7 @@ class MainActivity : Activity() {
         }
         resultPanel.addView(TextView(this).apply {
             text = if (twoPane) "검사 결과 · 상세 작업" else "검사 결과 전체 목록"
-            textSize = 18f; setTextColor(0xFFF2F7FF.toInt())
+            textSize = 18f; setTextColor(0xFF28271F.toInt())
             typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(2, 22, 2, 8)
         })
         results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 6, 0, 8) }
@@ -225,8 +225,8 @@ class MainActivity : Activity() {
         if (twoPane) {
             val splitRoot = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
-                setPadding(18, 14, 18, 18)
-                setBackgroundColor(0xFF0B1220.toInt())
+                setPadding(14, 12, 14, 14)
+                setBackgroundColor(0xFFF4F0E6.toInt())
             }
             splitRoot.addView(ScrollView(this).apply {
                 isFillViewport = true
@@ -234,7 +234,7 @@ class MainActivity : Activity() {
                 addView(menuColumn)
             }, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 0.42f))
             splitRoot.addView(View(this).apply {
-                setBackgroundColor(0xFF263B52.toInt())
+                setBackgroundColor(0xFFC9C0AD.toInt())
             }, LinearLayout.LayoutParams((1 * density).toInt(), LinearLayout.LayoutParams.MATCH_PARENT))
             splitRoot.addView(ScrollView(this).apply {
                 isFillViewport = true
@@ -295,13 +295,13 @@ class MainActivity : Activity() {
         val body = TextView(this).apply {
             text = guideText
             textSize = 15f
-            setTextColor(0xFFE3ECF7.toInt())
+            setTextColor(0xFF37362F.toInt())
             setPadding(20, 16, 20, 16)
             setTextIsSelectable(true)
         }
         val scroll = ScrollView(this).apply {
             addView(body)
-            setBackgroundColor(0xFF0B1220.toInt())
+            setBackgroundColor(0xFFF4F0E6.toInt())
         }
         AlertDialog.Builder(this)
             .setTitle("스마트 정리함 사용 설명서")
@@ -846,7 +846,7 @@ class MainActivity : Activity() {
                 orientation = LinearLayout.VERTICAL
                 setPadding(8, 6, 8, 8)
                 background = android.graphics.drawable.GradientDrawable().apply {
-                    setColor(0xFF152238.toInt())
+                    setColor(0xFFF0EBDD.toInt())
                     cornerRadius = 14f * resources.displayMetrics.density
                 }
             }
@@ -863,7 +863,7 @@ class MainActivity : Activity() {
             val selected = linkedMapOf<String, Entry>()
             val count = TextView(this).apply {
                 text = "선택 0개 / 삭제 가능 ${deletable.size}개 / 이동 가능 ${movable.size}개"
-                textSize = 13f; setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 8, 8, 8)
+                textSize = 13f; setTextColor(0xFF37362F.toInt()); setPadding(8, 8, 8, 8)
             }
             body.addView(count)
             if (isRestricted || isRecording) body.addView(TextView(this).apply {
@@ -872,7 +872,7 @@ class MainActivity : Activity() {
                     isProject -> "⚠ 프로젝트 파일은 앱 실행·빌드에 필요할 수 있어 개별 작업을 제한합니다. 기존 폴더 구조를 유지한 전체 프로젝트 복사만 사용하세요."
                     else -> "🔒 시스템·설정·실행 관련 파일은 일괄 작업에서 제외합니다. APK 설치 패키지는 별도로 삭제할 수 있습니다."
                 }
-                textSize = 12f; setTextColor(0xFFFFD28A.toInt()); setPadding(8, 4, 8, 8)
+                textSize = 12f; setTextColor(0xFF8A6740.toInt()); setPadding(8, 4, 8, 8)
             })
             val checks = mutableListOf<CheckBox>()
             fun updateCount() {
@@ -921,7 +921,7 @@ class MainActivity : Activity() {
                 val check = CheckBox(this).apply {
                     tag = entry.uri.toString()
                     isEnabled = !blocked
-                    buttonTintList = android.content.res.ColorStateList.valueOf(if (blocked) 0xFF78889A.toInt() else 0xFF70D6E5.toInt())
+                    buttonTintList = android.content.res.ColorStateList.valueOf(if (blocked) 0xFF78889A.toInt() else 0xFF65734B.toInt())
                     setOnCheckedChangeListener { _, checked ->
                         val key = entry.uri.toString()
                         if (checked) selected[key] = entry else selected.remove(key)
@@ -932,14 +932,14 @@ class MainActivity : Activity() {
                 row.addView(TextView(this).apply {
                     val badge = when { isTrash(entry) -> "🗑 "; isInstaller(entry) -> "📦 "; blocked -> "🔒 "; else -> "📄 " }
                     text = badge + entry.relativePath + " · " + humanSize(entry.size)
-                    textSize = 12f; setTextColor(0xFFE3ECF7.toInt()); setPadding(6, 7, 4, 7)
+                    textSize = 12f; setTextColor(0xFF37362F.toInt()); setPadding(6, 7, 4, 7)
                     setOnClickListener { showFileActions(entry) }
                 }, LinearLayout.LayoutParams(0, -2, 1f))
                 body.addView(row)
             }
             if (group.size > 1000) body.addView(TextView(this).apply {
                 text = "표시 제한: ${group.size - 1000}개 파일은 목록에서 생략했습니다."
-                setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 8, 8, 8)
+                setTextColor(0xFF37362F.toInt()); setPadding(8, 8, 8, 8)
             })
             card.addView(header); card.addView(body); results.addView(card)
         }
@@ -1007,7 +1007,7 @@ class MainActivity : Activity() {
                     text = "${entry.name} · ${humanSize(entry.size)} · ${formatDate(entry.modified)}" +
                         (if (entry.uri.toString() == latest.uri.toString()) "  ★ 최신 후보" else "  · 구버전 후보")
                     textSize = 12f
-                    setTextColor(if (index == 0) 0xFF70D6E5.toInt() else 0xFFE3ECF7.toInt())
+                    setTextColor(if (index == 0) 0xFF65734B.toInt() else 0xFF37362F.toInt())
                     setPadding(6, 8, 6, 8)
                     setOnClickListener { showFileActions(entry) }
                 }
@@ -1061,7 +1061,7 @@ class MainActivity : Activity() {
                 })
                 row.addView(TextView(this).apply {
                     text = "${entry.name} · ${humanSize(entry.size)} · ${formatDate(entry.modified)}"
-                    textSize = 12f; setTextColor(0xFFE3ECF7.toInt()); setPadding(6, 7, 6, 7)
+                    textSize = 12f; setTextColor(0xFF37362F.toInt()); setPadding(6, 7, 6, 7)
                     setOnClickListener { showFileActions(entry) }
                 }, LinearLayout.LayoutParams(0, -2, 1f))
                 detail.addView(row)
@@ -1248,7 +1248,7 @@ class MainActivity : Activity() {
             lateinit var globalSelect: CheckBox
             globalSelect = CheckBox(this).apply {
                 text = "삭제 검토 가능한 항목 전체 선택 (${allSafeCandidates.size})"
-                textSize = 14f; setTextColor(0xFF70D6E5.toInt()); isEnabled = allSafeCandidates.isNotEmpty()
+                textSize = 14f; setTextColor(0xFF65734B.toInt()); isEnabled = allSafeCandidates.isNotEmpty()
                 setOnCheckedChangeListener { _, checked ->
                     selectedDuplicateCandidates.clear()
                     if (checked) allSafeCandidates.forEach { selectedDuplicateCandidates[it.uri.toString()] = it }
@@ -1279,11 +1279,11 @@ class MainActivity : Activity() {
                 val sameName = triple.first
                 val keep = triple.second
                 val candidates = triple.third
-                val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 6, 8, 8); background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 14f * resources.displayMetrics.density } }
+                val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 6, 8, 8); background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFFF0EBDD.toInt()); cornerRadius = 14f * resources.displayMetrics.density } }
                 val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
                 val groupCheck = CheckBox(this).apply {
                     text = "이름 중복 ${index + 1}: ${sameName.first().name} · ${sameName.size}개 | 안전 후보 ${candidates.size}개"
-                    textSize = 14f; setTextColor(0xFF70D6E5.toInt()); isEnabled = candidates.isNotEmpty()
+                    textSize = 14f; setTextColor(0xFF65734B.toInt()); isEnabled = candidates.isNotEmpty()
                     setOnCheckedChangeListener { _, checked ->
                         candidates.forEach { entry ->
                             if (checked) selectedDuplicateCandidates[entry.uri.toString()] = entry
@@ -1316,10 +1316,10 @@ class MainActivity : Activity() {
                 val heading = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
                 heading.addView(groupCheck, LinearLayout.LayoutParams(0, -2, 1f))
                 heading.addView(Button(this).apply { text = "펼치기"; isAllCaps = false; setOnClickListener { body.visibility = if (body.visibility == View.VISIBLE) View.GONE else View.VISIBLE } })
-                body.addView(TextView(this).apply { text = "보존/날짜 미상: ${keep.size}개 · 안전 삭제 검토: ${candidates.size}개 · 전체 동일 크기 기준"; setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 6, 8, 6) })
-                keep.forEach { entry -> body.addView(TextView(this).apply { text = "✓ 보존 · ${entry.relativePath} · ${humanSize(entry.size)} · ${formatDate(entry.modified)}"; setTextColor(0xFFB9D7C7.toInt()); setPadding(8, 5, 8, 5) }) }
+                body.addView(TextView(this).apply { text = "보존/날짜 미상: ${keep.size}개 · 안전 삭제 검토: ${candidates.size}개 · 전체 동일 크기 기준"; setTextColor(0xFF37362F.toInt()); setPadding(8, 6, 8, 6) })
+                keep.forEach { entry -> body.addView(TextView(this).apply { text = "✓ 보존 · ${entry.relativePath} · ${humanSize(entry.size)} · ${formatDate(entry.modified)}"; setTextColor(0xFF65734B.toInt()); setPadding(8, 5, 8, 5) }) }
                 sameName.filter { entry -> entry !in keep && entry !in candidates }.forEach { entry ->
-                    body.addView(TextView(this).apply { text = "🔒 자동 선택 제외(경로/파일 크기 확인 필요) · ${entry.relativePath} · ${humanSize(entry.size)}"; setTextColor(0xFFFFD28A.toInt()); textSize = 12f; setPadding(8, 5, 8, 5) })
+                    body.addView(TextView(this).apply { text = "🔒 자동 선택 제외(경로/파일 크기 확인 필요) · ${entry.relativePath} · ${humanSize(entry.size)}"; setTextColor(0xFF8A6740.toInt()); textSize = 12f; setPadding(8, 5, 8, 5) })
                 }
                 candidates.forEach { entry ->
                     val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
@@ -1339,7 +1339,7 @@ class MainActivity : Activity() {
                     }
                     candidateCheckboxes.add(candidateBox to entry)
                     row.addView(candidateBox)
-                    row.addView(TextView(this).apply { text = "삭제 검토 · ${entry.relativePath} · ${humanSize(entry.size)} · ${formatDate(entry.modified)}"; setTextColor(0xFFFFD28A.toInt()); textSize = 12f; setPadding(6, 7, 4, 7) }, LinearLayout.LayoutParams(0, -2, 1f))
+                    row.addView(TextView(this).apply { text = "삭제 검토 · ${entry.relativePath} · ${humanSize(entry.size)} · ${formatDate(entry.modified)}"; setTextColor(0xFF8A6740.toInt()); textSize = 12f; setPadding(6, 7, 4, 7) }, LinearLayout.LayoutParams(0, -2, 1f))
                     body.addView(row)
                 }
                 card.addView(heading); card.addView(body); results.addView(card)
@@ -1354,12 +1354,12 @@ class MainActivity : Activity() {
             if (groupFiles.isEmpty()) return@forEach
             val isRecording = title.contains("녹음")
             val movable = groupFiles.filter { !isProtectedPath(it) && !listOf(".apk", ".apks", ".aab", ".dex", ".so", ".jar", ".exe", ".dll").any { ext -> it.name.endsWith(ext, true) } }
-            val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 6, 8, 8); background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 14f * resources.displayMetrics.density } }
-            val header = TextView(this).apply { text = "▶ $title · ${groupFiles.size}개"; textSize = 15f; setTextColor(0xFF70D6E5.toInt()); typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(10, 12, 10, 12) }
+            val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 6, 8, 8); background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFFF0EBDD.toInt()); cornerRadius = 14f * resources.displayMetrics.density } }
+            val header = TextView(this).apply { text = "▶ $title · ${groupFiles.size}개"; textSize = 15f; setTextColor(0xFF65734B.toInt()); typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(10, 12, 10, 12) }
             val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
             val selected = linkedMapOf<String, Entry>()
             val boxes = linkedMapOf<String, CheckBox>()
-            val count = TextView(this).apply { text = "선택 0개 / 이동 가능 ${movable.size}개"; textSize = 13f; setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 8, 8, 8) }
+            val count = TextView(this).apply { text = "선택 0개 / 이동 가능 ${movable.size}개"; textSize = 13f; setTextColor(0xFF37362F.toInt()); setPadding(8, 8, 8, 8) }
             fun refreshSelection() {
                 count.text = "선택 ${selected.size}개 / 이동 가능 ${movable.size}개"
                 boxes.forEach { (key, box) ->
@@ -1372,18 +1372,18 @@ class MainActivity : Activity() {
             actions.addView(Button(this).apply { text = "선택 해제"; isAllCaps = false; setOnClickListener { selected.clear(); refreshSelection() } }, LinearLayout.LayoutParams(0, -2, 1f))
             actions.addView(Button(this).apply { text = "폴더 전체 이동"; isAllCaps = false; isEnabled = movable.isNotEmpty(); setOnClickListener { if (movable.isEmpty()) toast("이동 가능한 파일이 없습니다.") else chooseBatchMoveDestination(movable, title.replace(Regex("[^가-힣A-Za-z0-9 _-]"), "").take(32)) } }, LinearLayout.LayoutParams(0, -2, 1f))
             body.addView(count); body.addView(actions)
-            if (isRecording) body.addView(TextView(this).apply { text = "🔒 녹음 파일은 보관 권장 항목입니다. 일괄 삭제 버튼을 제공하지 않습니다."; setTextColor(0xFFFFD28A.toInt()); setPadding(8, 6, 8, 6) })
+            if (isRecording) body.addView(TextView(this).apply { text = "🔒 녹음 파일은 보관 권장 항목입니다. 일괄 삭제 버튼을 제공하지 않습니다."; setTextColor(0xFF8A6740.toInt()); setPadding(8, 6, 8, 6) })
             if (!isRecording) body.addView(Button(this).apply { text = "선택 파일 삭제"; isAllCaps = false; setOnClickListener { val chosen = selected.values.toList(); if (chosen.isEmpty()) toast("삭제할 파일을 선택하세요.") else confirmDeleteGroup(chosen) } })
             groupFiles.take(1500).forEach { entry ->
                 val key = entry.uri.toString()
                 val blocked = isProtectedPath(entry) || isRecording || listOf(".apk", ".apks", ".aab", ".dex", ".so", ".jar", ".exe", ".dll").any { entry.name.endsWith(it, true) }
                 val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL; setPadding(4, 2, 4, 2) }
-                val check = CheckBox(this).apply { isEnabled = !blocked; buttonTintList = android.content.res.ColorStateList.valueOf(if (blocked) 0xFF78889A.toInt() else 0xFF70D6E5.toInt()); setOnCheckedChangeListener { _, checked -> if (checked) selected[key] = entry else selected.remove(key); count.text = "선택 ${selected.size}개 / 이동 가능 ${movable.size}개" } }
+                val check = CheckBox(this).apply { isEnabled = !blocked; buttonTintList = android.content.res.ColorStateList.valueOf(if (blocked) 0xFF78889A.toInt() else 0xFF65734B.toInt()); setOnCheckedChangeListener { _, checked -> if (checked) selected[key] = entry else selected.remove(key); count.text = "선택 ${selected.size}개 / 이동 가능 ${movable.size}개" } }
                 boxes[key] = check; row.addView(check)
-                row.addView(TextView(this).apply { text = "${entry.relativePath} · ${humanSize(entry.size)} · ${formatDate(entry.modified)}"; textSize = 12f; setTextColor(0xFFE3ECF7.toInt()); setPadding(6, 8, 4, 8); setOnClickListener { showFileActions(entry) } }, LinearLayout.LayoutParams(0, -2, 1f))
+                row.addView(TextView(this).apply { text = "${entry.relativePath} · ${humanSize(entry.size)} · ${formatDate(entry.modified)}"; textSize = 12f; setTextColor(0xFF37362F.toInt()); setPadding(6, 8, 4, 8); setOnClickListener { showFileActions(entry) } }, LinearLayout.LayoutParams(0, -2, 1f))
                 body.addView(row)
             }
-            if (groupFiles.size > 1500) body.addView(TextView(this).apply { text = "표시 제한: 1,500개"; setTextColor(0xFFE3ECF7.toInt()) })
+            if (groupFiles.size > 1500) body.addView(TextView(this).apply { text = "표시 제한: 1,500개"; setTextColor(0xFF37362F.toInt()) })
             header.setOnClickListener { val open = body.visibility != View.VISIBLE; body.visibility = if (open) View.VISIBLE else View.GONE; header.text = (if (open) "▼ " else "▶ ") + "$title · ${groupFiles.size}개" }
             card.addView(header); card.addView(body); results.addView(card)
         }
@@ -1913,7 +1913,7 @@ class MainActivity : Activity() {
                     lateinit var allCheck: CheckBox
                     allCheck = CheckBox(this).apply {
                         text = "안전 삭제 후보 전체 선택 (${allCandidates.size})"
-                        setTextColor(0xFF70D6E5.toInt())
+                        setTextColor(0xFF65734B.toInt())
                         setOnCheckedChangeListener { _, checked ->
                             selected.clear()
                             if (checked) allCandidates.forEach { selected[it.uri.toString()] = it }
@@ -1940,13 +1940,13 @@ class MainActivity : Activity() {
                         val group = triple.first
                         val keep = triple.second
                         val remove = triple.third
-                        val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 6, 8, 8); background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFF152238.toInt()); cornerRadius = 14f * resources.displayMetrics.density } }
+                        val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(8, 6, 8, 8); background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFFF0EBDD.toInt()); cornerRadius = 14f * resources.displayMetrics.density } }
                         val title = TextView(this).apply {
                             text = "중복 그룹 ${index + 1} · ${group.first().name} · ${group.size}개 · 삭제 후보 ${remove.size}개"
-                            setTextColor(0xFF70D6E5.toInt()); textSize = 14f; setPadding(8, 10, 8, 10)
+                            setTextColor(0xFF65734B.toInt()); textSize = 14f; setPadding(8, 10, 8, 10)
                         }
                         card.addView(title)
-                        keep.forEach { entry -> card.addView(TextView(this).apply { text = "✓ 보존 · ${entry.relativePath} · ${humanSize(entry.size)}"; setTextColor(0xFFB9D7C7.toInt()); setPadding(8, 4, 8, 4) }) }
+                        keep.forEach { entry -> card.addView(TextView(this).apply { text = "✓ 보존 · ${entry.relativePath} · ${humanSize(entry.size)}"; setTextColor(0xFF65734B.toInt()); setPadding(8, 4, 8, 4) }) }
                         remove.forEach { entry ->
                             val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
                             val box = CheckBox(this)
@@ -1961,7 +1961,7 @@ class MainActivity : Activity() {
                                 }
                             }
                             rowBoxes.add(box to entry); row.addView(box)
-                            row.addView(TextView(this).apply { text = "삭제 검토 · ${entry.relativePath} · ${humanSize(entry.size)}"; setTextColor(0xFFFFD28A.toInt()); textSize = 12f; setPadding(5, 6, 4, 6) }, LinearLayout.LayoutParams(0, -2, 1f))
+                            row.addView(TextView(this).apply { text = "삭제 검토 · ${entry.relativePath} · ${humanSize(entry.size)}"; setTextColor(0xFF8A6740.toInt()); textSize = 12f; setPadding(5, 6, 4, 6) }, LinearLayout.LayoutParams(0, -2, 1f))
                             card.addView(row)
                         }
                         results.addView(card)
@@ -2014,7 +2014,7 @@ class MainActivity : Activity() {
                     setOnClickListener { exportInstalledAppsCsv() }
                 })
                 val selected = mutableSetOf<String>()
-                val selectedCount = TextView(this).apply { text = "선택한 앱: 0개"; textSize = 14f; setTextColor(0xFFE3ECF7.toInt()); setPadding(8, 8, 8, 8) }
+                val selectedCount = TextView(this).apply { text = "선택한 앱: 0개"; textSize = 14f; setTextColor(0xFF37362F.toInt()); setPadding(8, 8, 8, 8) }
                 val folderName = EditText(this).apply { hint = "폴더 이름 (예: 쇼핑, 은행 및 카드)"; setSingleLine(true); setTextColor(0xFF172033.toInt()); setHintTextColor(0xFF68778C.toInt()) }
                 results.addView(selectedCount)
                 results.addView(folderName)
@@ -2041,9 +2041,9 @@ class MainActivity : Activity() {
                     val folderCheck = CheckBox(this).apply {
                         text = "전체"
                         textSize = 12f
-                        setTextColor(0xFFEAF4FF.toInt())
+                        setTextColor(0xFF302F27.toInt())
                         minWidth = (64 * resources.displayMetrics.density).toInt()
-                        buttonTintList = android.content.res.ColorStateList.valueOf(0xFF70D6E5.toInt())
+                        buttonTintList = android.content.res.ColorStateList.valueOf(0xFF65734B.toInt())
                         contentDescription = "$category 폴더 하위 앱 전체 선택"
                         setOnCheckedChangeListener { _, checked ->
                             list.forEach { (_, pkg) -> if (checked) selected.add(pkg) else selected.remove(pkg) }
@@ -2061,7 +2061,7 @@ class MainActivity : Activity() {
                     folderHeader.addView(folderCheck)
                     val folderTitle = TextView(this).apply {
                         text = "📁 $category · ${list.size}개   ← 앱을 길게 눌러 여기로 드래그"
-                        textSize = 15f; setTextColor(0xFF70D6E5.toInt())
+                        textSize = 15f; setTextColor(0xFF65734B.toInt())
                         typeface = android.graphics.Typeface.DEFAULT_BOLD
                         setPadding(8, 12, 8, 12)
                     }
@@ -2097,7 +2097,7 @@ class MainActivity : Activity() {
                             setBackgroundColor(0xFF111D2E.toInt())
                         }
                         val appCheck = CheckBox(this).apply {
-                            buttonTintList = android.content.res.ColorStateList.valueOf(0xFF70D6E5.toInt())
+                            buttonTintList = android.content.res.ColorStateList.valueOf(0xFF65734B.toInt())
                             isChecked = selected.contains(pkg)
                             setOnCheckedChangeListener { _, checked ->
                                 if (checked) selected.add(pkg) else selected.remove(pkg)
@@ -2108,7 +2108,7 @@ class MainActivity : Activity() {
                         row.addView(appCheck)
                         val appLabel = TextView(this).apply {
                             text = "⠿  📱 $label  (길게 눌러 이동)"
-                            textSize = 14f; setTextColor(0xFFE3ECF7.toInt())
+                            textSize = 14f; setTextColor(0xFF37362F.toInt())
                             setPadding(8, 10, 8, 10)
                             setOnClickListener { showAppDetails(label, pkg) }
                             setOnLongClickListener { view ->
@@ -2323,7 +2323,7 @@ class MainActivity : Activity() {
             val label = TextView(this).apply {
                 text = (if (item.directory) "📁 " else "📄 ") + item.relativePath + detail
                 textSize = 13f
-                setTextColor(0xFFE3ECF7.toInt())
+                setTextColor(0xFF37362F.toInt())
                 setPadding(8, 10, 8, 10)
                 setOnClickListener { if (!item.directory) showFileActions(item) }
             }
@@ -2338,7 +2338,7 @@ class MainActivity : Activity() {
         results.addView(TextView(this).apply {
             this.text = text
             textSize = if (heading) 16f else 13f
-            setTextColor(if (heading) 0xFF70D6E5.toInt() else 0xFFE3ECF7.toInt())
+            setTextColor(if (heading) 0xFF65734B.toInt() else 0xFF37362F.toInt())
             if (heading) typeface = android.graphics.Typeface.DEFAULT_BOLD
             setPadding(if (heading) 0 else 8, if (heading) 14 else 9, 8, 9)
             if (!heading) {
