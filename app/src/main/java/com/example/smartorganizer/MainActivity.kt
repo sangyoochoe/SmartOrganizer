@@ -43,7 +43,7 @@ private class EbookActionIconDrawable(
     private val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         color = tint
         style = android.graphics.Paint.Style.STROKE
-        strokeWidth = 1.8f
+        strokeWidth = 1.55f
         strokeCap = android.graphics.Paint.Cap.ROUND
         strokeJoin = android.graphics.Paint.Join.ROUND
     }
@@ -75,8 +75,8 @@ private class EbookActionIconDrawable(
     override fun setColorFilter(filter: android.graphics.ColorFilter?) { paint.colorFilter = filter }
     @Deprecated("Deprecated in Java")
     override fun getOpacity(): Int = android.graphics.PixelFormat.TRANSLUCENT
-    override fun getIntrinsicWidth(): Int = 28
-    override fun getIntrinsicHeight(): Int = 28
+    override fun getIntrinsicWidth(): Int = 30
+    override fun getIntrinsicHeight(): Int = 30
 }
 
 class MainActivity : Activity() {
