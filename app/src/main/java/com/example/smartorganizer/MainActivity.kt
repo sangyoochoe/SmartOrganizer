@@ -167,12 +167,13 @@ class MainActivity : Activity() {
         }
         val title = TextView(this).apply {
             text = "▤  스마트 정리함"; textSize = 27f
-            setTextColor(0xFF28271F.toInt()); typeface = android.graphics.Typeface.DEFAULT_BOLD
+            setTextColor(0xFF28271F.toInt()); typeface = android.graphics.Typeface.create("serif", android.graphics.Typeface.BOLD)
+            letterSpacing = -0.015f
             setPadding(0, 0, 0, 5)
         }
         val subtitle = TextView(this).apply {
             text = "파일과 앱을 차분하게 정리하는 공간"; textSize = 13f
-            setTextColor(0xFF777365.toInt())
+            setTextColor(0xFF777365.toInt()); typeface = android.graphics.Typeface.create("serif", android.graphics.Typeface.NORMAL)
         }
         foldStatus = TextView(this).apply {
             text = if (widthDp >= 600) "화면 모드 · 넓은 화면 배치" else "화면 모드 · 커버 화면 배치"
@@ -186,11 +187,11 @@ class MainActivity : Activity() {
         }
         summary = TextView(this).apply {
             text = "검사 전 · 내부 저장공간 전체 또는 원하는 폴더를 검사하세요."
-            textSize = 14f; setTextColor(0xFF302F27.toInt()); setPadding(16, 15, 16, 15)
+            textSize = 14f; setTextColor(0xFF302F27.toInt()); typeface = android.graphics.Typeface.create("serif", android.graphics.Typeface.NORMAL); setLineSpacing(2f, 1.04f); setPadding(16, 15, 16, 15)
             background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFFF0EBDD.toInt()); cornerRadius = 10f }
         }
         storageSummary = TextView(this).apply {
-            textSize = 13f; setTextColor(0xFF615F53.toInt()); setPadding(16, 12, 16, 12)
+            textSize = 13f; setTextColor(0xFF615F53.toInt()); typeface = android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL); setLineSpacing(1f, 1.05f); setPadding(16, 12, 16, 12)
             background = android.graphics.drawable.GradientDrawable().apply { setColor(0xFFE9E3D5.toInt()); cornerRadius = 10f }
         }
         scanButton = Button(this).apply { text = "＋ 스캔할 폴더 추가"; setOnClickListener { chooseFolder() }; setOnLongClickListener { showSelectedFolders(); true } }
@@ -259,7 +260,7 @@ class MainActivity : Activity() {
             }
             menuColumn.addView(TextView(this).apply {
                 text = "$sectionIcon  $label"; textSize = 15f; setTextColor(0xFF65734B.toInt())
-                typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(3, 16, 3, 7)
+                typeface = android.graphics.Typeface.create("serif", android.graphics.Typeface.BOLD); setPadding(3, 16, 3, 7)
                 letterSpacing = 0.025f
             })
             val grid = android.widget.GridLayout(this).apply { columnCount = columns; useDefaultMargins = false; alignmentMode = android.widget.GridLayout.ALIGN_BOUNDS }
@@ -297,7 +298,7 @@ class MainActivity : Activity() {
         resultPanel.addView(TextView(this).apply {
             text = if (twoPane) "검사 결과 · 상세 작업" else "검사 결과 전체 목록"
             textSize = 18f; setTextColor(0xFF28271F.toInt())
-            typeface = android.graphics.Typeface.DEFAULT_BOLD; setPadding(2, 22, 2, 8)
+            typeface = android.graphics.Typeface.create("serif", android.graphics.Typeface.BOLD); setPadding(2, 22, 2, 8)
         })
         results = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(0, 6, 0, 8) }
         resultPanel.addView(results)
